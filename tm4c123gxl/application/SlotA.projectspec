@@ -1,0 +1,1 @@
+<projectSpec><project name="SlotA" device="TM4C123GH6PM" compiler="tiarmclang" define="OTA_APP_SLOT=0" linker="linker/slot_a.cmd"/></projectSpec>
