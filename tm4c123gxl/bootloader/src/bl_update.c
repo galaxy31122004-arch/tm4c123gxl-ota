@@ -4,6 +4,9 @@
 
 #include "ota_crc32.h"
 
+static void put_u16(uint8_t *p, uint16_t value);
+static void put_u32(uint8_t *p, uint32_t value);
+
 static uint32_t slot_start(ota_slot_t slot)
 {
     return slot == OTA_SLOT_A ? OTA_SLOT_A_START : OTA_SLOT_B_START;
@@ -78,17 +81,16 @@ void bl_update_handle(bl_update_t *update, const ota_packet_t *request, ota_pack
     (void)memset(response, 0, sizeof(*response));
     if (request->command == OTA_CMD_GET_INFO) {
         response->command = OTA_CMD_ACK; response->sequence = request->sequence;
-        response->length = 10u;
+        response->length = 33u;
         response->payload[0] = OTA_CMD_GET_INFO;
-        response->payload[1] = update->services.metadata.active_slot;
-        response->payload[2] = update->services.metadata.pending_slot;
-        response->payload[3] = update->services.metadata.slot_a.state;
-        response->payload[4] = update->services.metadata.slot_b.state;
-        response->payload[5] = (uint8_t)update->state;
-        response->payload[6] = (uint8_t)update->last_error;
-        response->payload[7] = (uint8_t)update->received;
-        response->payload[8] = (uint8_t)(update->received >> 8u);
-        response->payload[9] = (uint8_t)(update->received >> 16u);
+        put_u16(&response->payload[1], 1u); put_u16(&response->payload[3], 0u); put_u16(&response->payload[5], 0u);
+        put_u16(&response->payload[7], update->services.metadata.slot_a.version.major); put_u16(&response->payload[9], update->services.metadata.slot_a.version.minor); put_u16(&response->payload[11], update->services.metadata.slot_a.version.patch);
+        put_u16(&response->payload[13], update->services.metadata.slot_b.version.major); put_u16(&response->payload[15], update->services.metadata.slot_b.version.minor); put_u16(&response->payload[17], update->services.metadata.slot_b.version.patch);
+        response->payload[19] = update->services.metadata.slot_a.state; response->payload[20] = update->services.metadata.slot_b.state;
+        response->payload[21] = update->services.metadata.active_slot; response->payload[22] = update->services.metadata.pending_slot;
+        response->payload[23] = update->services.metadata.pending_slot == OTA_SLOT_A ? (uint8_t)update->services.metadata.slot_a.boot_count : (uint8_t)update->services.metadata.slot_b.boot_count;
+        response->payload[24] = OTA_PROTOCOL_VERSION;
+        put_u32(&response->payload[25], OTA_SLOT_PAYLOAD_SIZE); put_u32(&response->payload[29], update->received);
         return;
     }
     if (request->command == OTA_CMD_RESET) {
@@ -148,4 +150,12 @@ void bl_update_poll(bl_update_t *update, uint32_t now_ms)
     if (update != NULL && update->state == BL_UPDATE_RECEIVING && now_ms - update->last_activity_ms >= OTA_PACKET_TIMEOUT_MS) {
         update->state = BL_UPDATE_IDLE; update->last_error = BL_ERROR_TIMEOUT; update->have_last = 0u;
     }
+}
+
+static void put_u16(uint8_t *p, uint16_t value) { p[0] = (uint8_t)value; p[1] = (uint8_t)(value >> 8u); }
+static void put_u32(uint8_t *p, uint32_t value) { p[0]=(uint8_t)value; p[1]=(uint8_t)(value>>8u); p[2]=(uint8_t)(value>>16u); p[3]=(uint8_t)(value>>24u); }
+
+void bl_update_note_activity(bl_update_t *update, uint32_t now_ms)
+{
+    if (update != NULL) update->last_activity_ms = now_ms;
 }

@@ -57,5 +57,6 @@ typedef struct {
 void bl_update_init(bl_update_t *update, const bl_services_t *services);
 void bl_update_handle(bl_update_t *update, const ota_packet_t *request, ota_packet_t *response);
 void bl_update_poll(bl_update_t *update, uint32_t now_ms);
+void bl_update_note_activity(bl_update_t *update, uint32_t now_ms);
 
 #endif

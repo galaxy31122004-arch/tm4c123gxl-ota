@@ -47,7 +47,7 @@ def test_transport_recovers_from_noise_bad_crc_and_fragmented_reply():
 
 
 def test_transport_defaults_and_semantic_nack_do_not_retry():
-    nack = Packet(NACK, 0, bytes((GET_INFO, 9))).encode()
+    nack = Packet(NACK, 0, bytes((GET_INFO, 0, 9))).encode()
     serial = FakeSerial(responses=[[nack]])
     transport = SerialTransport(serial)
     assert transport.timeout == 1.0
@@ -65,7 +65,7 @@ def test_transport_retries_timeouts_then_exhausts():
 
 
 def test_client_info_and_reset():
-    info = b"\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
+    info = struct.pack("<9H6BII", 1, 0, 0, 1, 0, 0, 0, 0, 0, 2, 0, 0, 255, 0, 1, 112640, 0)
     serial = FakeSerial(responses=[[response(GET_INFO, 0, info)], [response(8, 1)]])
     client = OtaClient(SerialTransport(serial))
     assert client.get_info()["active_slot"] == 0
@@ -74,7 +74,7 @@ def test_client_info_and_reset():
 
 def test_update_retries_lost_data_ack_with_same_packet():
     def info(slot_b_state=0):
-        return struct.pack("<6H6BII", 1, 0, 0, 0, 0, 0, 0, slot_b_state, 0, 255, 0, 1, 112640, 0)
+        return struct.pack("<9H6BII", 1, 0, 0, 1, 0, 0, 0, 0, 0, 2, slot_b_state, 0, 255, 0, 1, 112640, 0)
 
     payload = struct.pack("<II", 0x20008000, 0x00024001) + b"payload"
     header = bytearray(struct.pack("<IHBBHHHIII6s", 0x3141544F, 1, 1, 0, 1, 2, 3, len(payload), binascii.crc32(payload), 0, b"\0" * 6))

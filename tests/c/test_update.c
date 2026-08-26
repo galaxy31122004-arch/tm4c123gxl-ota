@@ -18,8 +18,10 @@ static void call(bl_update_t *u,uint8_t cmd,uint16_t seq,const void *p,uint16_t 
 int main(void) {
  fake_t f; bl_services_t s; bl_update_t u; ota_packet_t r; uint8_t payload[16]={0,0x80,0,0x20,1,0x40,2,0}; ota_firmware_header_t h=header(payload,sizeof(payload));
  memset(&f,0xff,sizeof(f)); f.writes=0u; f.header_writes=0u; memset(&s,0,sizeof(s)); s.read=rd;s.erase=er;s.program=wr;s.context=&f;s.metadata_io=(ota_metadata_io_t){mr,me,mp,&f};s.metadata_copy=0;s.metadata.magic=OTA_METADATA_MAGIC;s.metadata.schema_version=OTA_METADATA_SCHEMA_VERSION;s.metadata.slot_a.state=OTA_SLOT_ACTIVE;s.metadata.active_slot=OTA_SLOT_A;s.metadata.pending_slot=OTA_SLOT_NONE;ota_metadata_finalize(&s.metadata);
- bl_update_init(&u,&s); call(&u,OTA_CMD_START_UPDATE,0,&h,sizeof(h),&r); CHECK(r.command==OTA_CMD_ACK && u.state==BL_UPDATE_RECEIVING);
+ bl_update_init(&u,&s); call(&u,OTA_CMD_GET_INFO,0,NULL,0,&r); CHECK(r.command==OTA_CMD_ACK && r.length==33u && r.payload[21]==OTA_SLOT_A && r.payload[24]==OTA_PROTOCOL_VERSION);
+ call(&u,OTA_CMD_START_UPDATE,0,&h,sizeof(h),&r); CHECK(r.command==OTA_CMD_ACK && u.state==BL_UPDATE_RECEIVING);
  call(&u,OTA_CMD_DATA,1,payload,sizeof(payload),&r); CHECK(r.command==OTA_CMD_ACK && f.header_writes==0);
+ bl_update_note_activity(&u,900u); bl_update_poll(&u,1500u); CHECK(u.state==BL_UPDATE_RECEIVING);
  { unsigned writes=f.writes; call(&u,OTA_CMD_DATA,1,payload,sizeof(payload),&r); CHECK(r.command==OTA_CMD_ACK && f.writes==writes); }
  call(&u,OTA_CMD_END_UPDATE,2,NULL,0,&r); CHECK(r.command==OTA_CMD_ACK && f.header_writes==1 && u.services.metadata.slot_b.state==OTA_SLOT_PENDING);
  h.target_slot = OTA_SLOT_A; h.header_crc32 = ota_header_crc32(&h); call(&u,OTA_CMD_START_UPDATE,3,&h,sizeof(h),&r); CHECK(r.command==OTA_CMD_NACK && r.payload[2]==BL_ERROR_SLOT);

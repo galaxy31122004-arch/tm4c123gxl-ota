@@ -1,4 +1,5 @@
 #include "bl_hal.h"
+#include <stdbool.h>
 #include <string.h>
 
 static int range(uint32_t start, uint32_t end, uint32_t address, size_t length)
@@ -28,8 +29,21 @@ int bl_flash_range_allowed(uint32_t address, size_t length, ota_slot_t active, b
 #include "inc/hw_memmap.h"
 #include "inc/hw_nvic.h"
 #include "inc/hw_types.h"
+#include "driverlib/pin_map.h"
 static uint32_t g_clock;
-void bl_hal_init(void) { g_clock = SysCtlClockSet(SYSCTL_SYSDIV_2_5|SYSCTL_USE_PLL|SYSCTL_OSC_MAIN|SYSCTL_XTAL_16MHZ); }
+void bl_hal_init(void) {
+    SysCtlClockSet(SYSCTL_SYSDIV_2_5|SYSCTL_USE_PLL|SYSCTL_OSC_MAIN|SYSCTL_XTAL_16MHZ);
+    g_clock = SysCtlClockGet();
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOA); SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOB);
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_UART0); SysCtlPeripheralEnable(SYSCTL_PERIPH_UART1);
+    while (!SysCtlPeripheralReady(SYSCTL_PERIPH_UART0) || !SysCtlPeripheralReady(SYSCTL_PERIPH_UART1)) { }
+    GPIOPinConfigure(GPIO_PA0_U0RX); GPIOPinConfigure(GPIO_PA1_U0TX);
+    GPIOPinConfigure(GPIO_PB0_U1RX); GPIOPinConfigure(GPIO_PB1_U1TX);
+    GPIOPinTypeUART(GPIO_PORTA_BASE, GPIO_PIN_0 | GPIO_PIN_1);
+    GPIOPinTypeUART(GPIO_PORTB_BASE, GPIO_PIN_0 | GPIO_PIN_1);
+    UARTConfigSetExpClk(UART0_BASE, g_clock, OTA_UART1_BAUD_RATE, UART_CONFIG_WLEN_8 | UART_CONFIG_STOP_ONE | UART_CONFIG_PAR_NONE);
+    UARTConfigSetExpClk(UART1_BASE, g_clock, OTA_UART1_BAUD_RATE, UART_CONFIG_WLEN_8 | UART_CONFIG_STOP_ONE | UART_CONFIG_PAR_NONE);
+}
 uint32_t bl_hal_millis(void) { static uint32_t ms; return ++ms; }
 void bl_hal_watchdog_service(void) { }
 void bl_hal_reset(void) { HWREG(NVIC_APINT) = NVIC_APINT_VECTKEY | NVIC_APINT_SYSRESETREQ; for (;;) {} }

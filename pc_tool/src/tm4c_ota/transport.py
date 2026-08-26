@@ -56,8 +56,8 @@ class SerialTransport:
             reply = self._next_packet(time.monotonic() + self.timeout)
             if reply is None:
                 continue
-            if reply.command == NACK and reply.sequence == packet.sequence and len(reply.payload) >= 2 and reply.payload[0] == packet.command:
-                raise ProtocolNack(packet.command, packet.sequence, reply.payload[1])
+            if reply.command == NACK and reply.sequence == packet.sequence and len(reply.payload) >= 3 and reply.payload[0] == packet.command:
+                raise ProtocolNack(packet.command, packet.sequence, reply.payload[2])
             if reply.command == ACK and reply.sequence == packet.sequence and reply.payload[:1] == bytes((packet.command,)):
                 return reply
         raise RetryExhausted(f"no response after {self.retries + 1} attempts")

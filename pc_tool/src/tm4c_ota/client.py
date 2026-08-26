@@ -24,10 +24,10 @@ class OtaClient:
 
     def get_info(self):
         payload = self._request(GET_INFO).payload[1:]
-        if len(payload) < 24:
+        if len(payload) < 32:
             raise ValueError("GET_INFO response is too short")
-        values = struct.unpack_from("<6H6BII", payload)
-        return {"bootloader_version": values[0:3], "slot_a_version": values[3:6], "slot_a_state": values[6], "slot_b_state": values[7], "active_slot": values[8], "pending_slot": values[9], "pending_boot_count": values[10], "protocol_version": values[11], "maximum_payload_size": values[12], "update_progress": values[13]}
+        values = struct.unpack_from("<9H6BII", payload)
+        return {"bootloader_version": values[0:3], "slot_a_version": values[3:6], "slot_b_version": values[6:9], "slot_a_state": values[9], "slot_b_state": values[10], "active_slot": values[11], "pending_slot": values[12], "pending_boot_count": values[13], "protocol_version": values[14], "maximum_payload_size": values[15], "update_progress": values[16]}
 
     def update(self, image):
         if len(image) < HEADER_PAGE_SIZE:
