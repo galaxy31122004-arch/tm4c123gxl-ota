@@ -2,8 +2,8 @@
   "plan": "docs/PHASE1-IMPLEMENTATION-PLAN.md",
   "branch": "feature/phase1-implementation",
   "tasks": [
-    { "number": 1, "name": "Host Build, Configuration, Types, and CRC", "status": "pending" },
-    { "number": 2, "name": "Packet Codec and Streaming Parser", "status": "pending" },
+    { "number": 1, "name": "Host Build, Configuration, Types, and CRC", "status": "completed", "base": "aaa607d", "head": "dc42e54", "tests": "2/2 CTest passed" },
+    { "number": 2, "name": "Packet Codec and Streaming Parser", "status": "in_progress" },
     { "number": 3, "name": "Firmware Header, Packaging, and Validation", "status": "pending" },
     { "number": 4, "name": "Transactional Metadata and Boot Decisions", "status": "pending" },
     { "number": 5, "name": "CCS Projects, Startup, and Linker Placement", "status": "pending" },
