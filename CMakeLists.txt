@@ -8,6 +8,8 @@ include(cmake/tm4c_host.cmake)
 add_library(ota_common STATIC
     tm4c123gxl/common/src/ota_crc32.c
     tm4c123gxl/common/src/ota_protocol.c
+    tm4c123gxl/common/src/ota_metadata.c
+    tm4c123gxl/common/src/ota_boot.c
 )
 target_include_directories(ota_common PUBLIC tm4c123gxl/common/inc)
 tm4c_host_enable_strict_warnings(ota_common)
@@ -27,3 +29,13 @@ add_executable(protocol tests/c/test_protocol.c)
 target_link_libraries(protocol PRIVATE ota_common)
 tm4c_host_enable_strict_warnings(protocol)
 add_test(NAME protocol COMMAND protocol)
+
+add_executable(metadata tests/c/test_metadata.c)
+target_link_libraries(metadata PRIVATE ota_common)
+tm4c_host_enable_strict_warnings(metadata)
+add_test(NAME metadata COMMAND metadata)
+
+add_executable(boot tests/c/test_boot.c)
+target_link_libraries(boot PRIVATE ota_common)
+tm4c_host_enable_strict_warnings(boot)
+add_test(NAME boot COMMAND boot)
