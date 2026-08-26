@@ -10,6 +10,7 @@ add_library(ota_common STATIC
     tm4c123gxl/common/src/ota_protocol.c
     tm4c123gxl/common/src/ota_metadata.c
     tm4c123gxl/common/src/ota_boot.c
+    tm4c123gxl/common/src/ota_image.c
 )
 target_include_directories(ota_common PUBLIC tm4c123gxl/common/inc)
 tm4c_host_enable_strict_warnings(ota_common)
@@ -39,3 +40,9 @@ add_executable(boot tests/c/test_boot.c)
 target_link_libraries(boot PRIVATE ota_common)
 tm4c_host_enable_strict_warnings(boot)
 add_test(NAME boot COMMAND boot)
+
+add_executable(image tests/c/test_image.c)
+target_include_directories(image PRIVATE tm4c123gxl/common/inc)
+target_link_libraries(image PRIVATE ota_common)
+tm4c_host_enable_strict_warnings(image)
+add_test(NAME image COMMAND image)
