@@ -1,0 +1,22 @@
+{
+  "title": "TM4C123GXL OTA",
+  "deviceName": "TM4C123GXL-OTA-01",
+  "telemetryKeys": [
+    "ota_state",
+    "ota_progress",
+    "app_version",
+    "bootloader_version",
+    "active_slot",
+    "device_uptime",
+    "last_update",
+    "ota_error"
+  ],
+  "widgets": [
+    {"type": "latest", "title": "Device Status", "key": "active_slot"},
+    {"type": "latest", "title": "Firmware", "key": "app_version"},
+    {"type": "latest", "title": "Bootloader", "key": "bootloader_version"},
+    {"type": "latest", "title": "OTA Status", "key": "ota_state"},
+    {"type": "gauge", "title": "OTA Progress", "key": "ota_progress", "min": 0, "max": 100},
+    {"type": "latest", "title": "OTA Error", "key": "ota_error"}
+  ]
+}

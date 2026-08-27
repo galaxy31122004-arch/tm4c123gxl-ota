@@ -10,6 +10,7 @@ dependencies = ["pyserial>=3.5"]
 
 [project.optional-dependencies]
 test = ["pytest>=8"]
+mqtt = ["paho-mqtt>=2.0"]
 
 [project.scripts]
 tm4c-ota = "tm4c_ota.cli:main"
