@@ -41,13 +41,15 @@ certificate validation are deferred and must be tracked before production use.
 
 ## Image Stream
 
-The downloaded object is the Phase 1 packaged image: a 32-byte
-`ota_firmware_header_t` followed by the application payload. The reported remote
-size must equal `32 + payload_size`. The header is validated before erase, and
-payload data is passed directly to `bl_update_handle` in chunks no larger than
-256 bytes. `+HTTPCGET:<size>,` switches the parser into exact-length binary mode;
-binary bytes are never parsed as lines and the complete image is never buffered
-in RAM.
+The downloaded object is the Phase 1 packaged image: a 1 KiB header page
+containing a 32-byte `ota_firmware_header_t` and `0xff` padding, followed by the
+application payload. The reported remote size must equal
+`OTA_SLOT_HEADER_SIZE + payload_size` (1024 + payload). The 32-byte structure is
+downloaded and validated before erase. Padding and payload are then downloaded
+with HTTP Range requests no larger than 256 bytes; no request crosses the
+payload boundary at offset 1024. `+HTTPCGET:<size>,` switches the parser into
+exact-length binary mode, so binary CR/LF/NUL bytes are never parsed as AT lines
+and the complete image is never buffered in RAM.
 
 ## State, Retry, And Rollback
 
@@ -59,5 +61,6 @@ the previous active slot bootable, and never mark an invalid candidate active.
 ## Secrets And Tests
 
 Live credentials are excluded from source control. Host tests use dummy values.
-Hardware-only acceptance items remain pending until their board observations are
-recorded in the Phase 3 results document.
+The bootloader cloud OTA path has hardware evidence in `PHASE3-RESULTS.md`.
+Application-side MQTT reception and automatic reset handoff remain pending and
+must not be reported as complete.
