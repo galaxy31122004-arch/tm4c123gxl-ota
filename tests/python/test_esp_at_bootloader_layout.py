@@ -13,7 +13,13 @@ def test_esp_at_linker_is_confined_to_phase1_bootloader_region():
     assert "origin = 0x20000000, length = 0x00007FC0" in linker
     assert "origin = 0x20007FC0, length = 0x00000040" in linker
     assert ".intvecs : > 0x00000000" in linker
+    assert "--stack_size=2048" in linker
     assert "__STACK_TOP = 0x20007FC0" in linker
+
+    application = (ROOT / "tm4c_uart_esp32_bridge" / "bridge_uart.c").read_text(
+        encoding="ascii"
+    )
+    assert "static esp_at_controller_t controller;" in application
 
 
 def test_phase1_slot_a_still_starts_after_bootloader():

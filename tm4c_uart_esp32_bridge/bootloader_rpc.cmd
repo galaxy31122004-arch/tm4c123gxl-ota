@@ -1,5 +1,5 @@
 --retain=g_pfnVectors
---stack_size=1024
+--stack_size=2048
 
 MEMORY
 {

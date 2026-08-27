@@ -73,8 +73,8 @@ static void uart1_init(void)
 
 int main(void)
 {
-    esp_at_controller_t controller;
-    esp_at_controller_config_t config = {
+    static esp_at_controller_t controller;
+    static const esp_at_controller_config_t config = {
         WIFI_SSID,
         WIFI_PASSWORD,
         THINGSBOARD_TOKEN,
