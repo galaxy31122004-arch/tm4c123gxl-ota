@@ -10,6 +10,7 @@ HEADER_PAGE_SIZE = 1024
 MAGIC = 0x3141544F
 SCHEMA_VERSION = 1
 SLOT_PENDING = 3
+START_UPDATE_TIMEOUT_SECONDS = 90.0
 
 
 class OtaClient:
@@ -17,10 +18,16 @@ class OtaClient:
         self.transport = transport
         self._sequence = 0
 
-    def _request(self, command, payload=b""):
+    def _request(self, command, payload=b"", timeout=None):
         packet = Packet(command, self._sequence, payload)
         self._sequence = (self._sequence + 1) & 0xFFFF
-        return self.transport.request(packet)
+        previous_timeout = self.transport.timeout
+        if timeout is not None:
+            self.transport.timeout = timeout
+        try:
+            return self.transport.request(packet)
+        finally:
+            self.transport.timeout = previous_timeout
 
     def get_info(self):
         payload = self._request(GET_INFO).payload[1:]
@@ -47,7 +54,7 @@ class OtaClient:
         info = self.get_info()
         if target == info["active_slot"]:
             raise ValueError("image targets the active slot")
-        self._request(START_UPDATE, image[:32])
+        self._request(START_UPDATE, image[:32], START_UPDATE_TIMEOUT_SECONDS)
         payload = image[HEADER_PAGE_SIZE:]
         for offset in range(0, len(payload), 256):
             self._request(DATA, payload[offset:offset + 256])

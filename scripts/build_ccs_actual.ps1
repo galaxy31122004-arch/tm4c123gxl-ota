@@ -16,6 +16,8 @@ function Compile([string]$Source,[string]$Output,[string[]]$Defines=@()) {
 function Link([string]$Output,[string]$Map,[string]$Linker,[string[]]$Inputs) {
     & $cc '--target=arm-ti-none-eabi' '-mcpu=cortex-m4' '-mthumb' '-fshort-wchar' "-Wl,-m,$Map" -o $Output @Inputs $Linker
     if ($LASTEXITCODE) { throw "Link failed: $Output" }
+    # Preserve every loadable section.  The bootloader executes .startup from
+    # flash and copies the SRAM run image from its FLASH load address.
     & $objcopy -O binary $Output ([IO.Path]::ChangeExtension($Output,'.bin'))
     if ($LASTEXITCODE) { throw "Binary conversion failed: $Output" }
 }
@@ -26,8 +28,10 @@ try {
     Compile 'tm4c123gxl\application\startup_tm4c123.c' "$objects\app_startup.o"
     Compile 'tm4c123gxl\application\src\app_main.c' "$objects\app_a_main.o" @('-DOTA_APP_SLOT=0','-DAPP_VERSION_MAJOR=1','-DAPP_VERSION_MINOR=0','-DAPP_VERSION_PATCH=0')
     Compile 'tm4c123gxl\application\src\app_main.c' "$objects\app_b_main.o" @('-DOTA_APP_SLOT=1','-DAPP_VERSION_MAJOR=1','-DAPP_VERSION_MINOR=0','-DAPP_VERSION_PATCH=1')
+    Compile 'tm4c123gxl\application\src\app_main.c' "$objects\app_b_no_confirm_main.o" @('-DOTA_APP_SLOT=1','-DAPP_VERSION_MAJOR=1','-DAPP_VERSION_MINOR=0','-DAPP_VERSION_PATCH=2','-DNO_CONFIRM')
     Link "$artifacts\application_SlotA.out" "$artifacts\application_SlotA.map" 'tm4c123gxl\application\linker\slot_a.cmd' @("$objects\app_crc.o","$objects\app_confirm.o","$objects\app_a_main.o","$objects\app_startup.o")
     Link "$artifacts\application_SlotB.out" "$artifacts\application_SlotB.map" 'tm4c123gxl\application\linker\slot_b.cmd' @("$objects\app_crc.o","$objects\app_confirm.o","$objects\app_b_main.o","$objects\app_startup.o")
+    Link "$artifacts\application_SlotB_NoConfirm.out" "$artifacts\application_SlotB_NoConfirm.map" 'tm4c123gxl\application\linker\slot_b.cmd' @("$objects\app_crc.o","$objects\app_confirm.o","$objects\app_b_no_confirm_main.o","$objects\app_startup.o")
     $bootObjects = @()
     foreach ($name in @('ota_crc32','ota_protocol','ota_metadata','ota_boot','ota_image')) { $out="$objects\bl_$name.o"; Compile "tm4c123gxl\common\src\$name.c" $out; $bootObjects += $out }
     foreach ($name in @('bl_hal_tm4c','bl_update','bl_jump','bl_main')) { $out="$objects\$name.o"; Compile "tm4c123gxl\bootloader\src\$name.c" $out @('-DTARGET_IS_TM4C123_RB1'); $bootObjects += $out }
@@ -37,6 +41,7 @@ try {
     Link "$artifacts\bootloader.out" "$artifacts\bootloader.map" 'tm4c123gxl\bootloader\linker\bootloader.cmd' $bootObjects
     py -3.10 scripts\package_image.py --slot A --version 1.0.0 --input artifacts\application_SlotA.bin --output artifacts\factory_slot_a_v1.0.0.bin
     py -3.10 scripts\package_image.py --slot B --version 1.0.1 --input artifacts\application_SlotB.bin --output artifacts\ota_slot_b_v1.0.1.bin
+    py -3.10 scripts\package_image.py --slot B --version 1.0.2 --input artifacts\application_SlotB_NoConfirm.bin --output artifacts\ota_slot_b_no_confirm_v1.0.2.bin
     $checks=@(@('bootloader.map','00000000'),@('application_SlotA.map','00008400'),@('application_SlotB.map','00024000'))
     foreach($check in $checks) { if ((Get-Content -Raw (Join-Path $artifacts $check[0])) -notmatch "\.intvecs\s+0\s+$($check[1])") { throw "Bad vector address in $($check[0])" } }
     if ((Get-Item "$artifacts\bootloader.bin").Length -gt 32768) { throw 'Bootloader exceeds 32 KB.' }

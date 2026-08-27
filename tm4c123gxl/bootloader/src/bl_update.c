@@ -108,8 +108,10 @@ void bl_update_handle(bl_update_t *update, const ota_packet_t *request, ota_pack
         target = (ota_slot_t)update->header.target_slot;
         if (ota_header_validate(&update->header, target) != OTA_IMAGE_OK) { fail(update, response, request, BL_ERROR_HEADER); return; }
         if (target == update->services.metadata.active_slot) { fail(update, response, request, BL_ERROR_SLOT); return; }
+        /* Invalidate the header immediately.  Erase payload pages lazily so
+         * START_UPDATE can acknowledge before the host transport times out. */
         if (update->services.erase == NULL || update->services.program == NULL || update->services.read == NULL ||
-            update->services.erase(update->services.context, slot_start(target), OTA_SLOT_SIZE, update->services.metadata.active_slot) != 0) {
+            update->services.erase(update->services.context, slot_start(target), OTA_FLASH_PAGE_SIZE, update->services.metadata.active_slot) != 0) {
             fail(update, response, request, BL_ERROR_FLASH); return;
         }
         update->state = BL_UPDATE_RECEIVING; update->received = 0u; update->next_sequence = request->sequence + 1u;
@@ -121,7 +123,9 @@ void bl_update_handle(bl_update_t *update, const ota_packet_t *request, ota_pack
         if (update->have_last && request->sequence == update->last_sequence && request->length == update->last_length && crc == update->last_crc) { ack(response, request); return; }
         if (request->sequence != update->next_sequence || request->length == 0u || request->length > update->header.payload_size - update->received) { fail(update, response, request, BL_ERROR_SEQUENCE); return; }
         target = (ota_slot_t)update->header.target_slot;
-        if (update->services.program(update->services.context, slot_payload_start(target) + update->received, request->payload, request->length, update->services.metadata.active_slot) != 0 ||
+        if (((update->received % OTA_FLASH_PAGE_SIZE) == 0u &&
+             update->services.erase(update->services.context, slot_payload_start(target) + update->received, OTA_FLASH_PAGE_SIZE, update->services.metadata.active_slot) != 0) ||
+            update->services.program(update->services.context, slot_payload_start(target) + update->received, request->payload, request->length, update->services.metadata.active_slot) != 0 ||
             update->services.read(update->services.context, slot_payload_start(target) + update->received, readback, request->length) != 0 ||
             memcmp(readback, request->payload, request->length) != 0) { fail(update, response, request, BL_ERROR_FLASH); return; }
         update->received += request->length; update->last_sequence = request->sequence; update->last_length = request->length; update->last_crc = crc;

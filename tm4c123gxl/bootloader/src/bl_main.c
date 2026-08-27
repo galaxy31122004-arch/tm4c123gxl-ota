@@ -36,7 +36,10 @@ static void reconstruct_metadata(bl_services_t *services)
     else if (valid_b) { set_slot_from_image(&services->metadata.slot_b, &b, OTA_SLOT_ACTIVE); services->metadata.active_slot = OTA_SLOT_B; }
     if (valid_b && services->metadata.active_slot != OTA_SLOT_B) set_slot_from_image(&services->metadata.slot_b, &b, OTA_SLOT_VALID);
     ota_metadata_finalize(&services->metadata); services->metadata_copy = 0u;
-    (void)ota_metadata_commit(&services->metadata_io, &services->metadata, 1u);
+    if (ota_metadata_commit(&services->metadata_io, &services->metadata, 1u) == OTA_METADATA_OK) {
+        ++services->metadata.generation;
+        ota_metadata_finalize(&services->metadata);
+    }
 }
 static void uart_response(const ota_packet_t *packet)
 {
@@ -50,6 +53,7 @@ void bl_main(void)
     ota_confirmation_t confirmation; ota_confirmation_t *confirmation_ptr = NULL; ota_slot_t confirmed_slot; ota_version_t confirmed_version;
     ota_boot_result_t boot_result; uint32_t update_window_start;
     bl_hal_init();
+    bl_hal_uart0_log("BL_READY\r\n");
     (void)memset(&services, 0, sizeof(services));
     services.read = flash_read; services.erase = flash_erase; services.program = flash_program;
     services.metadata_io = (ota_metadata_io_t){ metadata_read, metadata_erase, metadata_program, NULL };
@@ -62,8 +66,8 @@ void bl_main(void)
     if (boot_result.commit_required) { ota_metadata_finalize(&services.metadata); (void)ota_metadata_commit(&services.metadata_io, &services.metadata, services.metadata_copy); }
     bl_update_init(&update, &services); ota_parser_init(&parser); update_window_start = bl_hal_millis();
     for (;;) { uint8_t byte; uint32_t now = bl_hal_millis(); bl_update_poll(&update, now); bl_hal_watchdog_service();
-        if (bl_hal_uart1_read(&byte, 10u) != 0 && ota_parser_consume(&parser, byte, now, &request) == OTA_PARSE_PACKET) { bl_update_handle(&update, &request, &response); bl_update_note_activity(&update, now); uart_response(&response); if (update.state == BL_UPDATE_READY_TO_BOOT) bl_hal_reset(); }
-        if (update.state == BL_UPDATE_IDLE && (uint32_t)(now - update_window_start) >= UINT32_C(2000)) {
+        if (bl_hal_uart1_read(&byte, 10u) != 0 && ota_parser_consume(&parser, byte, now, &request) == OTA_PARSE_PACKET) { bl_update_handle(&update, &request, &response); bl_update_note_activity(&update, bl_hal_millis()); uart_response(&response); if (update.state == BL_UPDATE_READY_TO_BOOT) { boot_confirmation_clear(); bl_hal_uart_wait_tx_complete(); bl_hal_reset(); } }
+        if (update.state == BL_UPDATE_IDLE && (uint32_t)(now - update_window_start) >= UINT32_C(60000)) {
             if (boot_result.decision == OTA_BOOT_SLOT_A) bl_jump_to_image(OTA_SLOT_A_PAYLOAD_START);
             if (boot_result.decision == OTA_BOOT_SLOT_B) bl_jump_to_image(OTA_SLOT_B_PAYLOAD_START);
             update_window_start = now;
