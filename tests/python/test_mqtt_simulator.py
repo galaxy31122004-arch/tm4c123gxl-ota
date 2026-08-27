@@ -16,9 +16,15 @@ def test_scenario_emits_attributes_and_terminal_state(scenario, terminal):
     events = simulator.scenario_events(scenario)
     assert events[0][0] == simulator.ATTRIBUTES_TOPIC
     assert events[0][1]["active_slot"] == "A"
-    assert events[-1][0] == simulator.TELEMETRY_TOPIC
-    assert events[-1][1]["ota_state"] == terminal
-    json.dumps(events[-1][1])
+    telemetry = [payload for topic, payload in events if topic == simulator.TELEMETRY_TOPIC]
+    assert telemetry[-1]["ota_state"] == terminal
+    json.dumps(telemetry[-1])
+
+
+def test_success_updates_persistent_attributes_after_ota():
+    attributes = [payload for topic, payload in simulator.scenario_events("success") if topic == simulator.ATTRIBUTES_TOPIC]
+    assert attributes[-1]["active_slot"] == "B"
+    assert attributes[-1]["app_version"] == "1.0.1"
 
 
 def test_dashboard_definition_contains_required_widgets():

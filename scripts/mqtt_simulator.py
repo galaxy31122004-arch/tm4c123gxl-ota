@@ -63,6 +63,14 @@ def scenario_events(name: str) -> list[tuple[str, dict]]:
         if state == "ROLLBACK":
             values.update(app_version="1.0.0", active_slot="A")
         events.append((TELEMETRY_TOPIC, build_telemetry(**values)))
+    final = events[-1][1]
+    events.append((ATTRIBUTES_TOPIC, {
+        "device_model": attributes["device_model"],
+        "hardware_version": attributes["hardware_version"],
+        "bootloader_version": final["bootloader_version"],
+        "app_version": final["app_version"],
+        "active_slot": final["active_slot"],
+    }))
     return events
 
 
