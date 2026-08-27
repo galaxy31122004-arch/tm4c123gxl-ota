@@ -1,6 +1,7 @@
 #include <string.h>
 
 #include "bl_hal.h"
+#include "bl_main.h"
 #include "bl_update.h"
 #include "ota_boot.h"
 #include "boot_confirm.h"
@@ -14,6 +15,8 @@ static int flash_erase(void *context, uint32_t address, size_t length, ota_slot_
 { (void)context; return bl_hal_flash_erase(address, length, active) == OTA_ERROR_NONE ? 0 : -1; }
 static int flash_program(void *context, uint32_t address, const uint8_t *source, size_t length, ota_slot_t active)
 { (void)context; return bl_hal_flash_program(address, source, length, active) == OTA_ERROR_NONE ? 0 : -1; }
+static void reset_target(void *context)
+{ (void)context; bl_hal_uart_wait_tx_complete(); bl_hal_reset(); }
 static ota_metadata_result_t metadata_read(void *c, unsigned copy, ota_metadata_record_t *r)
 { return flash_read(c, copy == 0u ? OTA_METADATA_COPY0_START : OTA_METADATA_COPY1_START, (uint8_t *)r, sizeof(*r)) == 0 ? OTA_METADATA_OK : OTA_METADATA_IO_ERROR; }
 static ota_metadata_result_t metadata_erase(void *c, unsigned copy)
@@ -47,6 +50,16 @@ static void uart_response(const ota_packet_t *packet)
     if (ota_packet_encode(packet, frame, sizeof(frame), &length) == OTA_PROTOCOL_OK)
         for (index = 0u; index < length; ++index) bl_hal_uart1_write(frame[index]);
 }
+void bl_services_init(bl_services_t *services)
+{
+    if (services == NULL) return;
+    (void)memset(services, 0, sizeof(*services));
+    services->read = flash_read;
+    services->erase = flash_erase;
+    services->program = flash_program;
+    services->metadata_io = (ota_metadata_io_t){ metadata_read, metadata_erase, metadata_program, NULL };
+    services->reset = reset_target;
+}
 void bl_main(void)
 {
     ota_metadata_record_t metadata; unsigned selected = 0u; bl_services_t services; bl_update_t update; ota_parser_t parser; ota_packet_t request, response;
@@ -54,9 +67,7 @@ void bl_main(void)
     ota_boot_result_t boot_result; uint32_t update_window_start;
     bl_hal_init();
     bl_hal_uart0_log("BL_READY\r\n");
-    (void)memset(&services, 0, sizeof(services));
-    services.read = flash_read; services.erase = flash_erase; services.program = flash_program;
-    services.metadata_io = (ota_metadata_io_t){ metadata_read, metadata_erase, metadata_program, NULL };
+    bl_services_init(&services);
     if (ota_metadata_load(&services.metadata_io, &metadata, &selected) == OTA_METADATA_OK) { services.metadata = metadata; services.metadata_copy = selected; }
     else reconstruct_metadata(&services);
     if (boot_confirmation_consume(&confirmed_slot, &confirmed_version) != 0) {

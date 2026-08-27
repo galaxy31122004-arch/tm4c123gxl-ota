@@ -33,6 +33,13 @@ its ICDI debugger and UART COM7:
   payload.
 - After three unconfirmed boot attempts, the bootloader marked Slot B as
   `FAILED` and rolled back to the factory Slot A image.
+- A partial `v1.0.1` update was interrupted after the first 256 of 376 payload
+  bytes by closing the COM7 serial transport. After the packet timeout, Slot A
+  remained active and no pending image was created. A subsequent reboot
+  discarded the partial update.
+- A partial update was also interrupted by issuing `RESET` after the first data
+  chunk. The TM4C reset immediately, disconnected COM7 as expected, and rebooted
+  with Slot A active, no pending image, and zero update progress.
 
 Final board status after the rollback test:
 
@@ -56,10 +63,11 @@ Phase 1 core flow:      PASS
 ```
 
 The core Phase 1 acceptance paths are verified on hardware: successful
-A-to-B update with confirmation, and unconfirmed-image rollback to A. The
-extended fault-injection list in `OTA-PLAN.md` has test coverage in the host
-suite where applicable, but every physical fault scenario (for example power
-loss during a flash write and cable removal mid-transfer) has not been run.
+A-to-B update with confirmation, unconfirmed-image rollback to A, interruption
+of the host serial session, and reset during an OTA transfer. The extended
+fault-injection list in `OTA-PLAN.md` has host-test coverage where applicable.
+Actual VDD power removal while Flash is writing and physically unplugging the
+USB cable mid-transfer have not been run yet.
 
 ## Reproduce
 
@@ -69,6 +77,8 @@ Build, flash, and exercise the board with:
 powershell -ExecutionPolicy Bypass -File scripts/setup_pc_tool.ps1
 powershell -ExecutionPolicy Bypass -File scripts/flash_factory.ps1
 powershell -ExecutionPolicy Bypass -File scripts/simulate_esp32.ps1 -Port COM7
+& .\.venv\Scripts\python.exe scripts/test_interrupted_transfer.py --port COM7
+& .\.venv\Scripts\python.exe scripts/test_reset_during_ota.py --port COM7
 ```
 
 The simulation command sends `GET_INFO`, `START_UPDATE`, sequential `DATA`
