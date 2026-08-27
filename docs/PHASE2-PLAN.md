@@ -410,10 +410,10 @@ ThingsBoard Cloud
 | ERROR | PASS | `ota_error=2` |
 | ROLLBACK | PASS | Slot A, firmware 1.0.0, `ota_error=9` |
 | MQTT topic/payload | PASS | `docs/PHASE2-CONTRACT.md` |
-| Cloud dashboard widgets | PENDING | Not created on tenant yet |
+| Cloud dashboard widgets | PASS | User confirmed widgets read device data |
 | OTA command/RPC round-trip | PENDING | No ESP32/simulator subscriber yet |
 
-Phase 2 remains incomplete until the two `PENDING` items are verified on the tenant.
+Phase 2 remains incomplete until the OTA command/RPC round-trip is verified on the tenant.
 ```
 
 Sau đó Phase 3 mới triển khai ESP32 DevKit V1 + ESP-AT v4.2 để kết nối thật vào contract này.

@@ -37,8 +37,8 @@ The `error` scenario was accepted with `ota_state=ERROR`, `ota_error=2`.
 The `rollback` scenario was accepted with `ota_state=ROLLBACK`, `ota_error=9`,
 `active_slot=A`, and `app_version=1.0.0`.
 
-Dashboard widget setup and RPC round-trip remain pending. The simulator supports
-broker publishing with:
+Dashboard widgets have been created on the tenant and confirmed to read device data.
+The OTA command/RPC round-trip remains pending. The simulator supports broker publishing with:
 
 ```powershell
 pip install -e ".\pc_tool[mqtt]"
