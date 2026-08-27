@@ -96,3 +96,11 @@ target_include_directories(main_services PRIVATE tm4c123gxl/bootloader/inc tm4c1
 target_link_libraries(main_services PRIVATE bl_main_host)
 tm4c_host_enable_strict_warnings(main_services)
 add_test(NAME main_services COMMAND main_services)
+
+add_library(esp_at_rpc STATIC tm4c_uart_esp32_bridge/esp_at_rpc.c)
+target_include_directories(esp_at_rpc PUBLIC tm4c_uart_esp32_bridge)
+tm4c_host_enable_strict_warnings(esp_at_rpc)
+add_executable(test_esp_at_rpc tests/c/test_esp_at_rpc.c)
+target_link_libraries(test_esp_at_rpc PRIVATE esp_at_rpc)
+tm4c_host_enable_strict_warnings(test_esp_at_rpc)
+add_test(NAME esp_at_rpc COMMAND test_esp_at_rpc)
