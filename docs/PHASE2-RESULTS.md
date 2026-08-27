@@ -21,9 +21,20 @@ Run the simulator locally:
 
 ## Cloud Verification Status
 
-ThingsBoard device creation, dashboard import, broker publish and RPC round-trip remain
-pending until a ThingsBoard host and device access token are supplied. The simulator
-supports those checks with:
+ThingsBoard device creation and broker publish have now been verified with the device
+`TM4C123GXL-OTA-01` using the Phase 2 simulator. The observed latest telemetry was:
+
+```text
+active_slot       B
+app_version       1.0.1
+bootloader_version 1.0.0
+ota_progress      100
+ota_state         SUCCESS
+ota_error         0
+```
+
+Dashboard widget setup and RPC round-trip remain pending. The simulator supports
+broker publishing with:
 
 ```powershell
 pip install -e ".\pc_tool[mqtt]"
