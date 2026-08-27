@@ -12,7 +12,7 @@ Cap nhat: 2026-08-28
 | --- | --- | --- | --- |
 | Phase 1 - A/B bootloader | PASS | Build, memory map, UART OTA, CRC, confirmation, rollback, interruption va fault test vat ly | Khong con gate Phase 1 |
 | Phase 2 - ESP-AT/ThingsBoard | PASS | Wi-Fi, MQTT, telemetry, dashboard, RPC `GET_INFO`, topic/payload contract | Khong con gate Phase 2 |
-| Phase 3 - Cloud firmware OTA | CORE E2E PASS | ThingsBoard `START_OTA`, HTTPS size/download, HTTP Range chunks, Flash inactive slot, CRC, reboot, confirmation va active Slot B `1.0.1` | Application-side MQTT handoff/auto-reset, TLS certificate hardening, telemetry chi tiet |
+| Phase 3 - Cloud firmware OTA | CORE E2E PASS | ThingsBoard `START_OTA`, HTTPS Range chunks, Flash inactive slot, CRC, reboot/confirmation; application handoff build PASS | Hardware acceptance cho app auto-reset, TLS certificate hardening, telemetry chi tiet |
 
 Phase 3 da PASS luong OTA cloud trong bootloader tren board that. Toan bo san
 pham chua production-ready vi application hien tai khong duy tri MQTT sau khi
@@ -137,7 +137,7 @@ ThingsBoard tenant that. Chi tiet: [PHASE2-CONTRACT.md](PHASE2-CONTRACT.md).
 
 ## 7. Phase 3 - Cloud firmware OTA
 
-Trang thai: **CORE E2E PASS, APPLICATION HANDOFF PENDING**.
+Trang thai: **CORE E2E PASS, APPLICATION HANDOFF BUILD PASS / HARDWARE PENDING**.
 
 ### ThingsBoard contract
 
@@ -225,21 +225,16 @@ Reset TM4C
   -> metadata ACTIVE
 ```
 
-Day la luong da test va PASS. Gioi han: neu application dang chay sau khi cua so
-bootloader dong, widget RPC khong co MQTT subscriber tren TM4C.
+Cloud OTA bootloader flow da test va PASS. Application-side MQTT/reset handoff
+da implement va build PASS, nhung chua duoc chot PASS tren board tu widget.
 
 ## 9. Cong viec tiep theo dung thu tu
 
-1. Them application-side ESP-AT/MQTT service.
-2. Application nhan `START_OTA`, validate version va luu request vao retained
-   SRAM mailbox.
-3. Application tu reset bang NVIC, khong can nut reset vat ly.
-4. Bootloader consume mailbox va tu download sau khi MQTT ready.
-5. Them one-shot/duplicate protection cho mailbox va RPC.
-6. Hardware test widget khi application dang chay.
-7. Sua `GET_INFO` de doc metadata runtime thay vi response tinh.
-8. Publish progress chi tiet tai safe AT command boundaries.
-9. Provision CA va bat TLS certificate validation truoc production.
+1. Nap application/bootloader moi va hardware test widget khi app dang chay.
+2. Test duplicate RPC, mailbox CRC hong va reset giua handoff.
+3. Sua `GET_INFO` de doc metadata runtime thay vi response tinh.
+4. Publish progress chi tiet tai safe AT command boundaries.
+5. Provision CA va bat TLS certificate validation truoc production.
 
 Luong dich:
 

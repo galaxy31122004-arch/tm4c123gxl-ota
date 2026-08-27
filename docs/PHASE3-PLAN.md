@@ -9,7 +9,7 @@ TM4C, verify, reboot, confirm va rollback ma khong thay memory map/protocol
 Phase 1.
 
 Trang thai: **core E2E PASS tren hardware; application-side remote trigger va
-auto-reset con pending**.
+auto-reset da build PASS, hardware acceptance con pending**.
 
 ## Contract
 
@@ -78,13 +78,16 @@ candidate fails 3 boots -> FAILED -> previous ACTIVE slot
 - ThingsBoard telemetry Slot B/version 1.0.1.
 - Host tests, TI build, ICDI flash/verify.
 
-## Con lai
+## Application handoff da trien khai
 
-### P0 - Application handoff
+Application duy tri MQTT tren UART1. Khi nhan `START_OTA`, application luu
+`{magic, schema, version, crc}` vao retained mailbox tai `0x20007FA0`, gui RPC
+response, cho UART drain 500 ms va tu NVIC reset. Bootloader consume mailbox
+mot lan, queue dung version va bat dau OTA sau khi network ready.
 
-Application duy tri MQTT. Khi nhan `START_OTA`, application luu
-`{magic, version, crc}` vao retained mailbox va tu NVIC reset. Bootloader
-consume mailbox mot lan va bat dau OTA sau khi network ready.
+Mailbox confirmation 64 byte van nam rieng tai `0x20007FC0`, nen handoff khong
+ghi de co che confirmation/rollback. Host tests va TI CCS build da PASS; hardware
+test tu widget khi application dang chay van PENDING.
 
 ### P1 - Runtime truth
 
@@ -100,9 +103,9 @@ consume mailbox mot lan va bat dau OTA sau khi network ready.
 
 ## Acceptance tiep theo
 
-1. De board chay application qua bootloader window.
+1. Nap artifact moi va de board chay application qua bootloader window.
 2. Nhan widget OTA ma khong cham board.
-3. Application luu mailbox va tu reset.
+3. Xac minh UART co `RPC_START_OTA_ACCEPTED`, reset va `BL_READY`.
 4. Bootloader consume dung version va download inactive-slot package.
 5. New application confirm; ThingsBoard bao dung active slot/version.
 6. Duplicate RPC, reset giua handoff va mailbox CRC hong khong erase active

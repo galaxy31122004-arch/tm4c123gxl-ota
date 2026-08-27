@@ -3,7 +3,7 @@
 #include <string.h>
 
 #if defined(__TI_ARM__)
-#define NOINIT __attribute__((section(".noinit")))
+#define NOINIT __attribute__((section(".boot_confirm")))
 #else
 #define NOINIT
 #endif

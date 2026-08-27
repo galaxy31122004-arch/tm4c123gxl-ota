@@ -97,5 +97,7 @@ void esp_at_controller_set_boot_confirmed(esp_at_controller_t *controller,
                                           int confirmed);
 esp_at_state_t esp_at_controller_state(const esp_at_controller_t *controller);
 int esp_at_controller_ota_active(const esp_at_controller_t *controller);
+int esp_at_controller_request_ota(esp_at_controller_t *controller,
+                                  const ota_version_t *version);
 
 #endif

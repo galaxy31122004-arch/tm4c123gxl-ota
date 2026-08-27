@@ -7,4 +7,4 @@ void ResetISR(void) {
     (void)main(); for (;;) {}
 #endif
 }
-__attribute__((section(".intvecs"))) const uintptr_t g_pfnVectors[] = { (uintptr_t)0x20007FC0u, (uintptr_t)ResetISR };
+__attribute__((section(".intvecs"))) const uintptr_t g_pfnVectors[] = { (uintptr_t)0x20007FA0u, (uintptr_t)ResetISR };

@@ -318,6 +318,43 @@ static void test_all_cloud_transfer_states_are_active(void)
     assert(!esp_at_controller_ota_active(&controller));
 }
 
+static void test_queued_ota_starts_after_mqtt_announce(void)
+{
+    capture_t capture = {{0}, {0}, 0U, {0U, 0U, 0U}};
+    esp_at_controller_t controller;
+    esp_at_controller_config_t config = test_config();
+    bl_update_t update = {0};
+    ota_version_t version = {1U, 2U, 3U};
+
+    esp_at_controller_init(&controller, &config, capture_tx, capture_log,
+                           &capture, 0U);
+    esp_at_controller_attach_update(&controller, &update);
+    assert(esp_at_controller_request_ota(&controller, &version));
+    controller.state = ESP_AT_STATE_MQTT_ANNOUNCE;
+    controller.command_sent = 1;
+    feed_line(&controller, "OK", 10U);
+
+    assert(controller.state == ESP_AT_STATE_OTA_CLEAR_HEADER);
+    assert(strstr(capture.tx, "AT+HTTPCHEAD=0\r\n") != NULL);
+    assert(strstr(controller.firmware_url, "version=1.2.3") != NULL);
+}
+
+static void test_queued_ota_rejects_active_version(void)
+{
+    capture_t capture = {{0}, {0}, 0U, {0U, 0U, 0U}};
+    esp_at_controller_t controller;
+    esp_at_controller_config_t config = test_config();
+    bl_update_t update = {0};
+    ota_version_t version = {1U, 0U, 1U};
+
+    update.services.metadata.active_slot = OTA_SLOT_A;
+    update.services.metadata.slot_a.version = version;
+    esp_at_controller_init(&controller, &config, capture_tx, capture_log,
+                           &capture, 0U);
+    esp_at_controller_attach_update(&controller, &update);
+    assert(!esp_at_controller_request_ota(&controller, &version));
+}
+
 static void test_range_stops_at_payload_boundary(void)
 {
     capture_t capture = {{0}, {0}, 0U, {0U, 0U, 0U}};
@@ -349,6 +386,8 @@ int main(void)
     test_invalid_cloud_header_reports_specific_failure();
     test_completed_http_chunk_requests_next_range();
     test_all_cloud_transfer_states_are_active();
+    test_queued_ota_starts_after_mqtt_announce();
+    test_queued_ota_rejects_active_version();
     test_range_stops_at_payload_boundary();
     puts("esp_at_controller tests passed");
     return 0;

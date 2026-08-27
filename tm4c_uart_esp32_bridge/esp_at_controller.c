@@ -377,6 +377,42 @@ static size_t escape_at_parameter(const char *input, char *output,
     return used;
 }
 
+static int prepare_ota_request(esp_at_controller_t *controller,
+                               const esp_at_rpc_version_t *version)
+{
+    char version_text[24];
+    int written = snprintf(version_text, sizeof(version_text), "%u.%u.%u",
+                           (unsigned)version->major,
+                           (unsigned)version->minor,
+                           (unsigned)version->patch);
+    if (written < 0 || (size_t)written >= sizeof(version_text) ||
+        esp_at_http_build_url(controller->config.mqtt_host,
+                              controller->config.thingsboard_token,
+                              controller->config.client_id, version_text,
+                              controller->firmware_url,
+                              sizeof(controller->firmware_url)) !=
+            ESP_AT_HTTP_OK) {
+        return 0;
+    }
+    controller->requested_version = (ota_version_t){
+        version->major, version->minor, version->patch
+    };
+    return 1;
+}
+
+static int is_active_version(const esp_at_controller_t *controller,
+                             const esp_at_rpc_version_t *version)
+{
+    const ota_slot_record_t *active;
+    if (controller->update == NULL) return 0;
+    active = controller->update->services.metadata.active_slot == OTA_SLOT_A ?
+        &controller->update->services.metadata.slot_a :
+        &controller->update->services.metadata.slot_b;
+    return active->version.major == version->major &&
+        active->version.minor == version->minor &&
+        active->version.patch == version->patch;
+}
+
 static void handle_rpc(esp_at_controller_t *controller, const char *line,
                        uint32_t now_ms)
 {
@@ -397,13 +433,7 @@ static void handle_rpc(esp_at_controller_t *controller, const char *line,
     }
     if (request.method == ESP_AT_RPC_METHOD_START_OTA &&
         controller->update != NULL) {
-        const ota_slot_record_t *active =
-            controller->update->services.metadata.active_slot == OTA_SLOT_A ?
-                &controller->update->services.metadata.slot_a :
-                &controller->update->services.metadata.slot_b;
-        if (active->version.major == request.version.major &&
-            active->version.minor == request.version.minor &&
-            active->version.patch == request.version.patch) {
+        if (is_active_version(controller, &request.version)) {
             log_message(controller, "RPC_START_OTA_CURRENT_VERSION");
             return;
         }
@@ -416,18 +446,7 @@ static void handle_rpc(esp_at_controller_t *controller, const char *line,
     }
     if (request.method == ESP_AT_RPC_METHOD_START_OTA &&
         controller->update != NULL) {
-        char version[24];
-        written = snprintf(version, sizeof(version), "%u.%u.%u",
-                           (unsigned)request.version.major,
-                           (unsigned)request.version.minor,
-                           (unsigned)request.version.patch);
-        if (written < 0 || (size_t)written >= sizeof(version) ||
-            esp_at_http_build_url(controller->config.mqtt_host,
-                                  controller->config.thingsboard_token,
-                                  controller->config.client_id, version,
-                                  controller->firmware_url,
-                                  sizeof(controller->firmware_url)) !=
-                ESP_AT_HTTP_OK ||
+        if (!prepare_ota_request(controller, &request.version) ||
             esp_at_http_build_command(ESP_AT_HTTP_GET_SIZE,
                                       controller->firmware_url, command,
                                       sizeof(command)) != ESP_AT_HTTP_OK) {
@@ -440,9 +459,6 @@ static void handle_rpc(esp_at_controller_t *controller, const char *line,
         controller->ota_size_pending = 1;
         controller->ota_telemetry_pending = 1;
         controller->ota_requested = 1;
-        controller->requested_version = (ota_version_t){
-            request.version.major, request.version.minor, request.version.patch
-        };
     }
     if (esp_at_rpc_build_response(&request, response, sizeof(response)) !=
             ESP_AT_RPC_OK ||
@@ -730,6 +746,27 @@ void esp_at_controller_set_ota_start(esp_at_controller_t *controller,
         controller->ota_start = ota_start;
         controller->ota_context = context;
     }
+}
+
+int esp_at_controller_request_ota(esp_at_controller_t *controller,
+                                  const ota_version_t *version)
+{
+    esp_at_rpc_version_t rpc_version;
+    if (controller == NULL || version == NULL || controller->update == NULL ||
+        (version->major == 0U && version->minor == 0U && version->patch == 0U)) {
+        return 0;
+    }
+    rpc_version.major = version->major;
+    rpc_version.minor = version->minor;
+    rpc_version.patch = version->patch;
+    if (is_active_version(controller, &rpc_version)) {
+        return 0;
+    }
+    if (!prepare_ota_request(controller, &rpc_version)) {
+        return 0;
+    }
+    controller->ota_requested = 1;
+    return 1;
 }
 
 void esp_at_controller_attach_update(esp_at_controller_t *controller,

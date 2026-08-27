@@ -5,6 +5,7 @@
 #include "bl_update.h"
 #include "ota_boot.h"
 #include "boot_confirm.h"
+#include "ota_request.h"
 
 #if defined(BL_ENABLE_CLOUD_OTA)
 #include "esp_at_controller.h"
@@ -92,6 +93,8 @@ void bl_main(void)
     ota_confirmation_t confirmation; ota_confirmation_t *confirmation_ptr = NULL; ota_slot_t confirmed_slot; ota_version_t confirmed_version;
     ota_boot_result_t boot_result; uint32_t update_window_start;
 #if defined(BL_ENABLE_CLOUD_OTA)
+    ota_version_t requested_version;
+    int has_ota_request;
     static esp_at_controller_t controller;
     const esp_at_controller_config_t cloud_config = {
         WIFI_SSID, WIFI_PASSWORD, THINGSBOARD_TOKEN, PHASE3_MQTT_HOST,
@@ -103,6 +106,9 @@ void bl_main(void)
     bl_hal_init();
     bl_hal_uart0_log("BL_READY\r\n");
     bl_services_init(&services);
+#if defined(BL_ENABLE_CLOUD_OTA)
+    has_ota_request = ota_request_consume(&requested_version);
+#endif
     if (ota_metadata_load(&services.metadata_io, &metadata, &selected) == OTA_METADATA_OK) { services.metadata = metadata; services.metadata_copy = selected; }
     else reconstruct_metadata(&services);
     if (boot_confirmation_consume(&confirmed_slot, &confirmed_version) != 0) {
@@ -128,6 +134,10 @@ void bl_main(void)
         esp_at_controller_init(&controller, &cloud_config, cloud_tx, cloud_log,
                                NULL, update_window_start);
         esp_at_controller_attach_update(&controller, &update);
+        if (has_ota_request != 0 &&
+            !esp_at_controller_request_ota(&controller, &requested_version)) {
+            bl_hal_uart0_log("OTA_REQUEST_REJECTED\r\n");
+        }
         esp_at_controller_set_boot_confirmed(&controller,
                                              confirmation_accepted);
     }

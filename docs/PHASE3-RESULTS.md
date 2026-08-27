@@ -65,18 +65,20 @@ Cac fix tuong ung: header-page validation, 32-byte header Range, <=256-byte
 Range, all-cloud-state timeout guard, clear header truoc size/retry, va chunk
 alignment dung payload boundary.
 
-## Current limitation
+## Application reset handoff
 
-MQTT controller hien chay trong bootloader service window. Khi application dang
-chay, dashboard RPC khong co TM4C subscriber.
+Application-side MQTT, retained OTA request mailbox va NVIC reset da duoc
+trien khai. Mailbox request 32 byte va mailbox confirmation 64 byte nam o hai
+vung SRAM `NOINIT` rieng biet. Bootloader consume request mot lan va queue URL
+firmware truoc khi MQTT vao ONLINE.
 
 - Cloud OTA core path trong bootloader: **PASS**.
 - Remote trigger khi bootloader online: **PASS**.
-- Remote trigger khi application dang chay: **NOT IMPLEMENTED**.
-- Automatic application-to-bootloader reset handoff: **NOT IMPLEMENTED**.
+- Remote trigger khi application dang chay: **BUILD VERIFIED; HARDWARE PENDING**.
+- Automatic application-to-bootloader reset handoff: **BUILD VERIFIED; HARDWARE PENDING**.
 
-Dashboard widget khong the tu loai bo gioi han firmware nay. Buoc tiep theo la
-application-side MQTT, retained OTA request mailbox va automatic NVIC reset.
+Host suite PASS 16/16 va TI CCS build sinh app/bootloader BIN hop le. Can nap
+artifact moi len board va bam widget de chot hardware acceptance.
 
 ## Status
 
@@ -87,7 +89,7 @@ Flash-safe HTTP Range chunking:     PASS
 Inactive-slot write/verify:         PASS
 Reboot/confirmation:                PASS
 Hardware active-slot telemetry:     PASS
-Application-side remote handoff:    PENDING
+Application-side remote handoff:    BUILD PASS / HARDWARE PENDING
 TLS certificate hardening:          PENDING
 Phase 3 core E2E:                   PASS
 Phase 3 production readiness:       INCOMPLETE
