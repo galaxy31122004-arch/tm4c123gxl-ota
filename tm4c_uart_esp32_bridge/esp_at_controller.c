@@ -6,6 +6,11 @@
 #include "esp_at_rpc.h"
 
 #define RPC_REQUEST_TOPIC "v1/devices/me/rpc/request/+"
+#define TELEMETRY_TOPIC "v1/devices/me/telemetry"
+#define ONLINE_TELEMETRY                                                     \
+    "{\\\"ota_state\\\":\\\"IDLE\\\",\\\"ota_progress\\\":0,"       \
+    "\\\"app_version\\\":\\\"1.0.0\\\",\\\"bootloader_version\\\":" \
+    "\\\"1.0.0\\\",\\\"active_slot\\\":\\\"A\\\",\\\"ota_error\\\":0}"
 
 static void log_message(esp_at_controller_t *controller, const char *message)
 {
@@ -71,6 +76,11 @@ static int send_state_command(esp_at_controller_t *controller)
         send_text(controller,
                   "AT+MQTTSUB=0,\"" RPC_REQUEST_TOPIC "\",0\r\n");
         return 1;
+    case ESP_AT_STATE_MQTT_ANNOUNCE:
+        send_text(controller,
+                  "AT+MQTTPUB=0,\"" TELEMETRY_TOPIC "\",\""
+                  ONLINE_TELEMETRY "\",0,0\r\n");
+        return 1;
     case ESP_AT_STATE_ONLINE:
     case ESP_AT_STATE_RETRY:
     default:
@@ -97,12 +107,12 @@ static void enter_retry(esp_at_controller_t *controller, uint32_t now_ms,
 
 static void advance_state(esp_at_controller_t *controller, uint32_t now_ms)
 {
-    if (controller->state < ESP_AT_STATE_MQTT_SUBSCRIBE) {
+    if (controller->state < ESP_AT_STATE_MQTT_ANNOUNCE) {
         controller->state = (esp_at_state_t)(controller->state + 1);
         controller->command_sent = 0;
         controller->state_started_ms = now_ms;
         esp_at_controller_tick(controller, now_ms);
-    } else if (controller->state == ESP_AT_STATE_MQTT_SUBSCRIBE) {
+    } else if (controller->state == ESP_AT_STATE_MQTT_ANNOUNCE) {
         controller->state = ESP_AT_STATE_ONLINE;
         controller->command_sent = 0;
         controller->state_started_ms = now_ms;

@@ -4,3 +4,4 @@ artifacts/
 .venv/
 __pycache__/
 *.pyc
+tm4c_uart_esp32_bridge/secrets.h

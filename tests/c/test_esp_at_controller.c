@@ -62,7 +62,14 @@ static void test_connects_in_order_and_handles_get_info(void)
         "AT+CWJAP=\"LabWifi\",\"SecretPassword\"\r\n"
         "AT+MQTTUSERCFG=0,1,\"TM4C123GXL\",\"DeviceToken\",\"\",0,0,\"\"\r\n"
         "AT+MQTTCONN=0,\"thingsboard.cloud\",1883,0\r\n"
-        "AT+MQTTSUB=0,\"v1/devices/me/rpc/request/+\",0\r\n";
+        "AT+MQTTSUB=0,\"v1/devices/me/rpc/request/+\",0\r\n"
+        "AT+MQTTPUB=0,\"v1/devices/me/telemetry\","
+        "\"{\\\"ota_state\\\":\\\"IDLE\\\","
+        "\\\"ota_progress\\\":0,"
+        "\\\"app_version\\\":\\\"1.0.0\\\","
+        "\\\"bootloader_version\\\":\\\"1.0.0\\\","
+        "\\\"active_slot\\\":\\\"A\\\","
+        "\\\"ota_error\\\":0}\",0,0\r\n";
     capture_t capture = {{0}, {0}};
     esp_at_controller_t controller;
     esp_at_controller_config_t config = test_config();
@@ -79,6 +86,7 @@ static void test_connects_in_order_and_handles_get_info(void)
     feed_line(&controller, "OK", 70U);
     feed_line(&controller, "OK", 80U);
     feed_line(&controller, "OK", 90U);
+    feed_line(&controller, "OK", 100U);
 
     assert(strcmp(capture.tx, expected_setup) == 0);
     assert(esp_at_controller_state(&controller) == ESP_AT_STATE_ONLINE);
@@ -86,7 +94,7 @@ static void test_connects_in_order_and_handles_get_info(void)
     feed_line(&controller,
               "+MQTTSUBRECV:0,\"v1/devices/me/rpc/request/42\",33,"
               "{\"method\":\"GET_INFO\",\"params\":{}}",
-              100U);
+              110U);
     assert(strstr(capture.tx,
                   "AT+MQTTPUB=0,\"v1/devices/me/rpc/response/42\","
                   "\"{\\\"app_version\\\":\\\"1.0.0\\\","
