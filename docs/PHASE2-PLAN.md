@@ -396,6 +396,24 @@ ThingsBoard Cloud
       +-- OTA state
       +-- Dashboard
       +-- MQTT contract
+
+## Verification status (2026-08-27)
+
+| Item | Status | Evidence |
+| --- | --- | --- |
+| ThingsBoard device | PASS | `TM4C123GXL-OTA-01` received MQTT |
+| Attributes | PASS | device, hardware, bootloader, app, slot |
+| Live telemetry | PASS | Cloud Latest telemetry |
+| MQTT simulator | PASS | `scripts/mqtt_simulator.py` |
+| Progress 0-100% | PASS | success/error/rollback scenarios |
+| SUCCESS | PASS | Slot B, firmware 1.0.1 |
+| ERROR | PASS | `ota_error=2` |
+| ROLLBACK | PASS | Slot A, firmware 1.0.0, `ota_error=9` |
+| MQTT topic/payload | PASS | `docs/PHASE2-CONTRACT.md` |
+| Cloud dashboard widgets | PENDING | Not created on tenant yet |
+| OTA command/RPC round-trip | PENDING | No ESP32/simulator subscriber yet |
+
+Phase 2 remains incomplete until the two `PENDING` items are verified on the tenant.
 ```
 
 Sau đó Phase 3 mới triển khai ESP32 DevKit V1 + ESP-AT v4.2 để kết nối thật vào contract này.
