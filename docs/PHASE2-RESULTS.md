@@ -1,5 +1,8 @@
 # Phase 2 Verification Results
 
+> Current phase ordering and status are maintained in `OTA-PLAN.md`. This file
+> records evidence only.
+
 Date: 2026-08-27
 
 ## Local Verification
@@ -38,7 +41,16 @@ The `rollback` scenario was accepted with `ota_state=ROLLBACK`, `ota_error=9`,
 `active_slot=A`, and `app_version=1.0.0`.
 
 Dashboard widgets have been created on the tenant and confirmed to read device data.
-The OTA command/RPC round-trip remains pending. The simulator supports broker publishing with:
+
+The TM4C/ESP-AT firmware has also reached `MQTT_RPC_READY` on COM7 after joining
+Wi-Fi, connecting MQTT, subscribing to the RPC request topic, and publishing its
+initial `IDLE` telemetry. This verifies the device-to-cloud hardware path.
+
+The real cloud-to-device `GET_INFO` round-trip remains pending. Acceptance
+requires both `RPC_GET_INFO_RESPONSE_SENT` on COM7 and a ThingsBoard response
+with the matching request ID. Simulator-only evidence is not sufficient.
+
+The simulator supports broker publishing with:
 
 ```powershell
 pip install -e ".\pc_tool[mqtt]"

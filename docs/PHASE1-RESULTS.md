@@ -66,8 +66,17 @@ The core Phase 1 acceptance paths are verified on hardware: successful
 A-to-B update with confirmation, unconfirmed-image rollback to A, interruption
 of the host serial session, and reset during an OTA transfer. The extended
 fault-injection list in `OTA-PLAN.md` has host-test coverage where applicable.
-Actual VDD power removal while Flash is writing and physically unplugging the
-USB cable mid-transfer have not been run yet.
+The user also completed both physical interruption tests on 2026-08-27:
+
+- Power was removed during an OTA/Flash operation. After power was restored,
+  the board rejected the incomplete update and returned to the previous active
+  application.
+- The transfer cable was physically unplugged during OTA. After reconnect and
+  reset, the board returned to the previous active application.
+
+Both physical cases therefore passed the Phase 1 rollback requirement. These
+observations are user-confirmed board evidence; the automated host suite remains
+the reproducible coverage for packet-level fault permutations.
 
 ## Reproduce
 

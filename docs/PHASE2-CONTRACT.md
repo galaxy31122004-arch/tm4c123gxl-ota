@@ -25,8 +25,22 @@ Attributes are published to `v1/devices/me/attributes`:
 | RPC request | `v1/devices/me/rpc/request/{request_id}` |
 | RPC response | `v1/devices/me/rpc/response/{request_id}` |
 
-RPC commands are `START_OTA`, `CANCEL_OTA`, `GET_INFO`, and `REBOOT`.
-The command payload for `START_OTA` is `{"command":"START_OTA","version":"1.0.1"}`.
+RPC methods are `START_OTA`, `CANCEL_OTA`, `GET_INFO`, and `REBOOT`.
+ThingsBoard server-side RPC uses its native `method`/`params` envelope:
+
+```json
+{"method":"GET_INFO","params":{}}
+```
+
+The current hardware milestone implements `GET_INFO` only. The parser accepts
+the legacy `{"command":"GET_INFO"}` payload for compatibility with early
+simulator tests, but new dashboard controls must use the native envelope.
+
+The planned Phase 3 request for starting an update is:
+
+```json
+{"method":"START_OTA","params":{"version":"1.0.1"}}
+```
 
 ## Telemetry
 

@@ -4,6 +4,24 @@ artifacts/
 .venv/
 __pycache__/
 *.pyc
+
+# Local build and test output
+.tmp_*
+build-*/
+*.egg-info/
+*.map
+
+# Serial hardware probes
+com*_probe.py
+com*_verify.py
+
+# ESP32 manufacturing/NVS backups and generated images
+esp32_*_backup.bin
+esp32_*_nvs.csv
+mfg_nvs_*.bin
+nvs_partition_gen.py
+
+# Local ESP-AT credentials and TI build output
 tm4c_uart_esp32_bridge/secrets.h
 tm4c_uart_esp32_bridge/build-ti/
 tm4c_uart_esp32_bridge/*.map
