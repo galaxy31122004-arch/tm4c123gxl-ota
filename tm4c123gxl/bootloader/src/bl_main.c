@@ -134,9 +134,7 @@ void bl_main(void)
 #endif
     for (;;) { uint8_t byte; uint32_t now = bl_hal_millis();
 #if defined(BL_ENABLE_CLOUD_OTA)
-        if (!cloud_enabled ||
-            (esp_at_controller_state(&controller) != ESP_AT_STATE_OTA_SIZE &&
-             esp_at_controller_state(&controller) != ESP_AT_STATE_OTA_DOWNLOAD))
+        if (!cloud_enabled || !esp_at_controller_ota_active(&controller))
 #endif
         bl_update_poll(&update, now);
         bl_hal_watchdog_service();
@@ -160,9 +158,7 @@ void bl_main(void)
         if (update.state == BL_UPDATE_READY_TO_BOOT) { boot_confirmation_clear(); bl_hal_uart_wait_tx_complete(); bl_hal_reset(); }
         if (update.state == BL_UPDATE_IDLE &&
 #if defined(BL_ENABLE_CLOUD_OTA)
-            (!cloud_enabled ||
-             (esp_at_controller_state(&controller) != ESP_AT_STATE_OTA_SIZE &&
-              esp_at_controller_state(&controller) != ESP_AT_STATE_OTA_DOWNLOAD)) &&
+            (!cloud_enabled || !esp_at_controller_ota_active(&controller)) &&
 #endif
             (uint32_t)(now - update_window_start) >= UINT32_C(60000)) {
             if (boot_result.decision == OTA_BOOT_SLOT_A) bl_jump_to_image(OTA_SLOT_A_PAYLOAD_START);

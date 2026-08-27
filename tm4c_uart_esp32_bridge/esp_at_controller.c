@@ -7,6 +7,8 @@
 
 #define RPC_REQUEST_TOPIC "v1/devices/me/rpc/request/+"
 #define WIFI_JOIN_TIMEOUT_MS 30000U
+#define OTA_HEADER_STRUCTURE_SIZE ((size_t)sizeof(ota_firmware_header_t))
+#define OTA_HTTP_CHUNK_SIZE 256U
 #define TELEMETRY_TOPIC "v1/devices/me/telemetry"
 #define ONLINE_TELEMETRY                                                     \
     "{\\\"ota_state\\\":\\\"IDLE\\\"\\,\\\"ota_progress\\\":0\\,"       \
@@ -24,8 +26,23 @@
 static int cloud_data(const unsigned char *data, size_t length, void *context)
 {
     esp_at_controller_t *controller = (esp_at_controller_t *)context;
-    return cloud_ota_write(&controller->cloud_ota, data, length) ==
-           CLOUD_OTA_OK;
+    controller->cloud_result =
+        cloud_ota_write(&controller->cloud_ota, data, length);
+    return controller->cloud_result == CLOUD_OTA_OK;
+}
+
+static const char *cloud_failure_message(cloud_ota_result_t result)
+{
+    switch (result) {
+    case CLOUD_OTA_HEADER:
+        return "OTA_HEADER_FAILED";
+    case CLOUD_OTA_ENGINE:
+        return "OTA_ENGINE_FAILED";
+    case CLOUD_OTA_SIZE:
+        return "OTA_SIZE_FAILED";
+    default:
+        return "OTA_STREAM_FAILED";
+    }
 }
 
 static void log_message(esp_at_controller_t *controller, const char *message)
@@ -38,6 +55,65 @@ static void log_message(esp_at_controller_t *controller, const char *message)
 static void send_text(esp_at_controller_t *controller, const char *text)
 {
     controller->tx(text, strlen(text), controller->context);
+}
+
+static void log_message(esp_at_controller_t *controller, const char *message);
+
+static int start_range_request(esp_at_controller_t *controller,
+                               uint32_t now_ms)
+{
+    char header[48];
+    char command[48];
+    char diagnostic[48];
+    size_t remaining = controller->remote_size - controller->ota_offset;
+    size_t chunk_size = controller->ota_offset == 0U ?
+                            OTA_HEADER_STRUCTURE_SIZE : OTA_HTTP_CHUNK_SIZE;
+    int header_length;
+    int command_length;
+
+    if (chunk_size > remaining) {
+        chunk_size = remaining;
+    }
+    if (controller->ota_offset < OTA_SLOT_HEADER_SIZE &&
+        chunk_size > OTA_SLOT_HEADER_SIZE - controller->ota_offset) {
+        chunk_size = OTA_SLOT_HEADER_SIZE - controller->ota_offset;
+    }
+    header_length = snprintf(header, sizeof(header), "Range: bytes=%u-%u",
+                             (unsigned)controller->ota_offset,
+                             (unsigned)(controller->ota_offset + chunk_size - 1U));
+    command_length = snprintf(command, sizeof(command), "AT+HTTPCHEAD=%u\r\n",
+                              (unsigned)header_length);
+    if (header_length <= 0 || (size_t)header_length >= sizeof(header) ||
+        command_length <= 0 || (size_t)command_length >= sizeof(command)) {
+        return 0;
+    }
+
+    controller->ota_chunk_size = chunk_size;
+    controller->range_header_stage = 0;
+    controller->ota_chunk_complete = 0;
+    controller->state = ESP_AT_STATE_OTA_RANGE_HEADER;
+    controller->state_started_ms = now_ms;
+    controller->command_sent = 1;
+    send_text(controller, command);
+    (void)snprintf(diagnostic, sizeof(diagnostic), "OTA_RANGE_%u_%u",
+                   (unsigned)controller->ota_offset,
+                   (unsigned)controller->ota_chunk_size);
+    log_message(controller, diagnostic);
+    return 1;
+}
+
+static int send_range_header(esp_at_controller_t *controller)
+{
+    char header[48];
+    int written = snprintf(header, sizeof(header), "Range: bytes=%u-%u",
+                           (unsigned)controller->ota_offset,
+                           (unsigned)(controller->ota_offset +
+                                      controller->ota_chunk_size - 1U));
+    if (written <= 0 || (size_t)written >= sizeof(header)) {
+        return 0;
+    }
+    controller->tx(header, (size_t)written, controller->context);
+    return 1;
 }
 
 static int format_and_send(esp_at_controller_t *controller,
@@ -67,6 +143,9 @@ static int send_state_command(esp_at_controller_t *controller)
         return 1;
     case ESP_AT_STATE_ECHO_OFF:
         send_text(controller, "ATE0\r\n");
+        return 1;
+    case ESP_AT_STATE_SYSLOG:
+        send_text(controller, "AT+SYSLOG=1\r\n");
         return 1;
     case ESP_AT_STATE_WIFI_MODE:
         send_text(controller, "AT+CWMODE=1\r\n");
@@ -127,7 +206,9 @@ static int send_state_command(esp_at_controller_t *controller)
                               ONLINE_TELEMETRY "\",0,0\r\n");
         return 1;
     case ESP_AT_STATE_ONLINE:
+    case ESP_AT_STATE_OTA_CLEAR_HEADER:
     case ESP_AT_STATE_OTA_SIZE:
+    case ESP_AT_STATE_OTA_RANGE_HEADER:
     case ESP_AT_STATE_OTA_DOWNLOAD:
     case ESP_AT_STATE_RETRY:
     default:
@@ -169,6 +250,8 @@ static const char *timeout_message(esp_at_state_t state)
         return "AT_TIMEOUT_SYNC";
     case ESP_AT_STATE_ECHO_OFF:
         return "AT_TIMEOUT_ECHO_OFF";
+    case ESP_AT_STATE_SYSLOG:
+        return "AT_TIMEOUT_SYSLOG";
     case ESP_AT_STATE_WIFI_MODE:
         return "AT_TIMEOUT_WIFI_MODE";
     case ESP_AT_STATE_WIFI_JOIN:
@@ -185,8 +268,12 @@ static const char *timeout_message(esp_at_state_t state)
         return "AT_TIMEOUT_MQTT_ANNOUNCE";
     case ESP_AT_STATE_ONLINE:
         return "AT_TIMEOUT_UNKNOWN";
+    case ESP_AT_STATE_OTA_CLEAR_HEADER:
+        return "AT_TIMEOUT_OTA_CLEAR_HEADER";
     case ESP_AT_STATE_OTA_SIZE:
         return "AT_TIMEOUT_OTA_SIZE";
+    case ESP_AT_STATE_OTA_RANGE_HEADER:
+        return "AT_TIMEOUT_OTA_RANGE_HEADER";
     case ESP_AT_STATE_OTA_DOWNLOAD:
         return "AT_TIMEOUT_OTA_DOWNLOAD";
     case ESP_AT_STATE_RETRY:
@@ -211,6 +298,8 @@ static const char *error_message(esp_at_state_t state)
         return "AT_ERROR_SYNC";
     case ESP_AT_STATE_ECHO_OFF:
         return "AT_ERROR_ECHO_OFF";
+    case ESP_AT_STATE_SYSLOG:
+        return "AT_ERROR_SYSLOG";
     case ESP_AT_STATE_WIFI_MODE:
         return "AT_ERROR_WIFI_MODE";
     case ESP_AT_STATE_WIFI_JOIN:
@@ -227,8 +316,12 @@ static const char *error_message(esp_at_state_t state)
         return "AT_ERROR_MQTT_ANNOUNCE";
     case ESP_AT_STATE_ONLINE:
         return "AT_ERROR_ONLINE";
+    case ESP_AT_STATE_OTA_CLEAR_HEADER:
+        return "AT_ERROR_OTA_CLEAR_HEADER";
     case ESP_AT_STATE_OTA_SIZE:
         return "AT_ERROR_OTA_SIZE";
+    case ESP_AT_STATE_OTA_RANGE_HEADER:
+        return "AT_ERROR_OTA_RANGE_HEADER";
     case ESP_AT_STATE_OTA_DOWNLOAD:
         return "AT_ERROR_OTA_DOWNLOAD";
     case ESP_AT_STATE_RETRY:
@@ -246,20 +339,13 @@ static void advance_state(esp_at_controller_t *controller, uint32_t now_ms)
         esp_at_controller_tick(controller, now_ms);
     } else if (controller->state == ESP_AT_STATE_MQTT_ANNOUNCE) {
         if (controller->ota_requested != 0) {
-            char command[ESP_AT_LINE_SIZE];
-            if (esp_at_http_build_command(ESP_AT_HTTP_GET_SIZE,
-                                          controller->firmware_url, command,
-                                          sizeof(command)) != ESP_AT_HTTP_OK) {
-                enter_retry(controller, now_ms, "OTA_RETRY_COMMAND_FAILED");
-                return;
-            }
-            controller->state = ESP_AT_STATE_OTA_SIZE;
+            controller->state = ESP_AT_STATE_OTA_CLEAR_HEADER;
             controller->command_sent = 1;
             controller->state_started_ms = now_ms;
             controller->ota_size_pending = 0;
             controller->ota_body_pending = 0;
             controller->ota_error_pending = 0U;
-            send_text(controller, command);
+            send_text(controller, "AT+HTTPCHEAD=0\r\n");
             log_message(controller, "OTA_RETRY_FROM_ZERO");
             return;
         }
@@ -381,6 +467,10 @@ static void handle_rpc(esp_at_controller_t *controller, const char *line,
 static void process_line(esp_at_controller_t *controller, const char *line,
                          uint32_t now_ms)
 {
+    if (strncmp(line, "ERR CODE:", 9U) == 0) {
+        log_message(controller, line);
+        return;
+    }
     if (controller->state == ESP_AT_STATE_OTA_SIZE &&
         strncmp(line, "+HTTPGETSIZE:", 13U) == 0) {
         size_t remote_size;
@@ -391,9 +481,8 @@ static void process_line(esp_at_controller_t *controller, const char *line,
             enter_retry(controller, now_ms, "OTA_SIZE_REJECTED");
             return;
         }
-        esp_at_http_stream_init(&controller->http_stream, remote_size,
-                                cloud_data, controller);
         controller->remote_size = remote_size;
+        controller->ota_offset = 0U;
         controller->ota_body_pending = 1;
         return;
     }
@@ -426,6 +515,13 @@ static void process_line(esp_at_controller_t *controller, const char *line,
         }
         if (controller->state == ESP_AT_STATE_OTA_SIZE &&
             controller->ota_size_pending != 0) {
+            controller->ota_size_pending = 0;
+            controller->state = ESP_AT_STATE_OTA_CLEAR_HEADER;
+            controller->state_started_ms = now_ms;
+            send_text(controller, "AT+HTTPCHEAD=0\r\n");
+            return;
+        }
+        if (controller->state == ESP_AT_STATE_OTA_CLEAR_HEADER) {
             char command[ESP_AT_LINE_SIZE];
             if (esp_at_http_build_command(ESP_AT_HTTP_GET_SIZE,
                                           controller->firmware_url, command,
@@ -433,24 +529,60 @@ static void process_line(esp_at_controller_t *controller, const char *line,
                 enter_retry(controller, now_ms, "OTA_SIZE_COMMAND_FAILED");
                 return;
             }
-            controller->ota_size_pending = 0;
+            controller->state = ESP_AT_STATE_OTA_SIZE;
             controller->state_started_ms = now_ms;
             send_text(controller, command);
             return;
         }
         if (controller->state == ESP_AT_STATE_OTA_SIZE &&
             controller->ota_body_pending != 0) {
+            controller->ota_body_pending = 0;
+            if (!start_range_request(controller, now_ms)) {
+                enter_retry(controller, now_ms, "OTA_RANGE_COMMAND_FAILED");
+            }
+            return;
+        }
+        if (controller->state == ESP_AT_STATE_OTA_RANGE_HEADER) {
             char command[ESP_AT_LINE_SIZE];
-            if (esp_at_http_build_command(ESP_AT_HTTP_GET_BODY,
+            if (controller->range_header_stage == 0) {
+                controller->range_header_stage = 1;
+                return;
+            }
+            if (controller->range_header_stage != 2 ||
+                esp_at_http_build_command(ESP_AT_HTTP_GET_BODY,
                                           controller->firmware_url, command,
                                           sizeof(command)) != ESP_AT_HTTP_OK) {
                 enter_retry(controller, now_ms, "OTA_BODY_COMMAND_FAILED");
                 return;
             }
-            controller->ota_body_pending = 0;
+            esp_at_http_stream_init(&controller->http_stream,
+                                    controller->ota_chunk_size,
+                                    cloud_data, controller);
             controller->state = ESP_AT_STATE_OTA_DOWNLOAD;
             controller->state_started_ms = now_ms;
             send_text(controller, command);
+            return;
+        }
+        if (controller->state == ESP_AT_STATE_OTA_DOWNLOAD &&
+            controller->ota_chunk_complete != 0) {
+            controller->ota_offset += controller->ota_chunk_size;
+            if (controller->ota_offset < controller->remote_size) {
+                if (!start_range_request(controller, now_ms)) {
+                    enter_retry(controller, now_ms,
+                                "OTA_RANGE_COMMAND_FAILED");
+                }
+                return;
+            }
+            if (cloud_ota_finish(&controller->cloud_ota) ==
+                CLOUD_OTA_READY_TO_REBOOT) {
+                controller->ota_requested = 0;
+                controller->state = ESP_AT_STATE_ONLINE;
+                controller->command_sent = 0;
+                send_text(controller, OTA_REBOOTING_TELEMETRY);
+                log_message(controller, "OTA_REBOOTING");
+            } else {
+                enter_retry(controller, now_ms, "OTA_VERIFY_FAILED");
+            }
             return;
         }
         if (controller->state == ESP_AT_STATE_OTA_SIZE ||
@@ -515,23 +647,31 @@ void esp_at_controller_receive(esp_at_controller_t *controller,
                                unsigned char byte,
                                uint32_t now_ms)
 {
+    if (controller->state == ESP_AT_STATE_OTA_RANGE_HEADER && byte == '>' &&
+        controller->range_header_stage == 1) {
+        if (!send_range_header(controller)) {
+            enter_retry(controller, now_ms, "OTA_RANGE_HEADER_FAILED");
+        } else {
+            controller->range_header_stage = 2;
+            controller->state_started_ms = now_ms;
+        }
+        return;
+    }
     if (controller->http_binary != 0) {
         esp_at_http_result_t result = esp_at_http_stream_feed(
             &controller->http_stream, &byte, 1U);
         if (result == ESP_AT_HTTP_DONE) {
+            char diagnostic[48];
             controller->http_binary = 0;
-            if (cloud_ota_finish(&controller->cloud_ota) ==
-                CLOUD_OTA_READY_TO_REBOOT) {
-                controller->ota_requested = 0;
-                controller->state = ESP_AT_STATE_ONLINE;
-                send_text(controller, OTA_REBOOTING_TELEMETRY);
-                log_message(controller, "OTA_REBOOTING");
-            } else {
-                enter_retry(controller, now_ms, "OTA_VERIFY_FAILED");
-            }
+            controller->ota_chunk_complete = 1;
+            controller->state_started_ms = now_ms;
+            (void)snprintf(diagnostic, sizeof(diagnostic), "OTA_CHUNK_DONE_%u",
+                           (unsigned)controller->ota_offset);
+            log_message(controller, diagnostic);
         } else if (result != ESP_AT_HTTP_MORE) {
             controller->http_binary = 0;
-            enter_retry(controller, now_ms, "OTA_STREAM_FAILED");
+            enter_retry(controller, now_ms,
+                        cloud_failure_message(controller->cloud_result));
         }
         return;
     }
@@ -571,6 +711,15 @@ void esp_at_controller_receive(esp_at_controller_t *controller,
 esp_at_state_t esp_at_controller_state(const esp_at_controller_t *controller)
 {
     return controller->state;
+}
+
+int esp_at_controller_ota_active(const esp_at_controller_t *controller)
+{
+    return controller != NULL &&
+        (controller->state == ESP_AT_STATE_OTA_CLEAR_HEADER ||
+         controller->state == ESP_AT_STATE_OTA_SIZE ||
+         controller->state == ESP_AT_STATE_OTA_RANGE_HEADER ||
+         controller->state == ESP_AT_STATE_OTA_DOWNLOAD);
 }
 
 void esp_at_controller_set_ota_start(esp_at_controller_t *controller,

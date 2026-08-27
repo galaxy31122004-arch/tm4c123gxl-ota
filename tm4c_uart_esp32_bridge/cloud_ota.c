@@ -24,7 +24,7 @@ static cloud_ota_result_t start_from_header(cloud_ota_t *cloud)
     if (cloud->header.version.major != cloud->expected_version.major ||
         cloud->header.version.minor != cloud->expected_version.minor ||
         cloud->header.version.patch != cloud->expected_version.patch ||
-        cloud->header.payload_size + sizeof(cloud->header) !=
+        cloud->header.payload_size + OTA_SLOT_HEADER_SIZE !=
             cloud->remote_size ||
         ota_header_validate(&cloud->header, target) != OTA_IMAGE_OK) {
         return CLOUD_OTA_HEADER;
@@ -60,8 +60,8 @@ cloud_ota_result_t cloud_ota_begin(cloud_ota_t *cloud, bl_update_t *update,
         return CLOUD_OTA_INVALID;
     }
     memset(cloud, 0, sizeof(*cloud));
-    if (remote_size <= sizeof(ota_firmware_header_t) ||
-        remote_size > sizeof(ota_firmware_header_t) + OTA_SLOT_PAYLOAD_SIZE) {
+    if (remote_size <= OTA_SLOT_HEADER_SIZE ||
+        remote_size > OTA_SLOT_HEADER_SIZE + OTA_SLOT_PAYLOAD_SIZE) {
         return CLOUD_OTA_SIZE;
     }
     cloud->update = update;
@@ -94,6 +94,12 @@ cloud_ota_result_t cloud_ota_write(cloud_ota_t *cloud,
                     return result;
                 }
             }
+        } else if (cloud->package_received < OTA_SLOT_HEADER_SIZE) {
+            size_t padding = OTA_SLOT_HEADER_SIZE - cloud->package_received;
+            size_t accepted = length < padding ? length : padding;
+            cloud->package_received += accepted;
+            data += accepted;
+            length -= accepted;
         } else {
             size_t space = sizeof(cloud->chunk) - cloud->chunk_length;
             size_t accepted = length < space ? length : space;

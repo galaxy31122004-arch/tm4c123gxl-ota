@@ -61,15 +61,16 @@ static ota_firmware_header_t make_header(const uint8_t *payload, size_t length)
 static void test_success_and_truncated_stream(void)
 {
     uint8_t payload[300] = {0x00U, 0x80U, 0x00U, 0x20U, 0x01U, 0x40U, 0x02U};
-    uint8_t package[sizeof(ota_firmware_header_t) + sizeof(payload)];
+    uint8_t package[OTA_SLOT_HEADER_SIZE + sizeof(payload)];
     ota_firmware_header_t header = make_header(payload, sizeof(payload));
     fake_t fake;
     bl_update_t update;
     cloud_ota_t cloud;
     ota_version_t expected = {1U, 2U, 3U};
 
+    memset(package, 0xff, sizeof(package));
     memcpy(package, &header, sizeof(header));
-    memcpy(package + sizeof(header), payload, sizeof(payload));
+    memcpy(package + OTA_SLOT_HEADER_SIZE, payload, sizeof(payload));
     setup(&fake, &update);
     assert(cloud_ota_begin(&cloud, &update, sizeof(package), &expected) == CLOUD_OTA_OK);
     assert(cloud_ota_write(&cloud, package, 17U) == CLOUD_OTA_OK);
@@ -92,7 +93,7 @@ static void test_rejects_size_before_erase(void)
 
     setup(&fake, &update);
     assert(cloud_ota_begin(&cloud, &update,
-                           sizeof(ota_firmware_header_t) +
+                           OTA_SLOT_HEADER_SIZE +
                            OTA_SLOT_PAYLOAD_SIZE + 1U, &expected) == CLOUD_OTA_SIZE);
     assert(fake.erases == 0U);
 }
@@ -108,7 +109,7 @@ static void test_rejects_unrequested_version_before_erase(void)
 
     setup(&fake, &update);
     assert(cloud_ota_begin(&cloud, &update,
-                           sizeof(header) + sizeof(payload), &expected) ==
+                           OTA_SLOT_HEADER_SIZE + sizeof(payload), &expected) ==
            CLOUD_OTA_OK);
     assert(cloud_ota_write(&cloud, (const unsigned char *)&header,
                            sizeof(header)) == CLOUD_OTA_HEADER);
@@ -118,15 +119,16 @@ static void test_rejects_unrequested_version_before_erase(void)
 static void test_abort_and_bad_payload_retain_active_slot(void)
 {
     uint8_t payload[16] = {0x00U, 0x80U, 0x00U, 0x20U, 0x01U, 0x40U, 0x02U};
-    uint8_t package[sizeof(ota_firmware_header_t) + sizeof(payload)];
+    uint8_t package[OTA_SLOT_HEADER_SIZE + sizeof(payload)];
     ota_firmware_header_t header = make_header(payload, sizeof(payload));
     ota_version_t expected = {1U, 2U, 3U};
     fake_t fake;
     bl_update_t update;
     cloud_ota_t cloud;
 
+    memset(package, 0xff, sizeof(package));
     memcpy(package, &header, sizeof(header));
-    memcpy(package + sizeof(header), payload, sizeof(payload));
+    memcpy(package + OTA_SLOT_HEADER_SIZE, payload, sizeof(payload));
     setup(&fake, &update);
     assert(cloud_ota_begin(&cloud, &update, sizeof(package), &expected) ==
            CLOUD_OTA_OK);
@@ -136,7 +138,7 @@ static void test_abort_and_bad_payload_retain_active_slot(void)
     assert(update.state == BL_UPDATE_IDLE);
     assert(update.services.metadata.active_slot == OTA_SLOT_A);
 
-    package[sizeof(header) + 8U] ^= 0x5aU;
+    package[OTA_SLOT_HEADER_SIZE + 8U] ^= 0x5aU;
     setup(&fake, &update);
     assert(cloud_ota_begin(&cloud, &update, sizeof(package), &expected) ==
            CLOUD_OTA_OK);

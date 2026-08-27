@@ -68,6 +68,7 @@ static void test_connects_in_order_and_handles_get_info(void)
     static const char expected_setup[] =
         "AT\r\n"
         "ATE0\r\n"
+        "AT+SYSLOG=1\r\n"
         "AT+CWMODE=1\r\n"
         "AT+CWJAP=\"LabWifi\",\"SecretPassword\"\r\n"
         "AT+MQTTCLEAN=0\r\n"
@@ -92,6 +93,7 @@ static void test_connects_in_order_and_handles_get_info(void)
     feed_line(&controller, "OK", 10U);
     feed_line(&controller, "OK", 20U);
     feed_line(&controller, "OK", 30U);
+    feed_line(&controller, "OK", 35U);
     feed_line(&controller, "WIFI CONNECTED", 40U);
     feed_line(&controller, "WIFI GOT IP", 50U);
     feed_line(&controller, "OK", 60U);
@@ -100,6 +102,7 @@ static void test_connects_in_order_and_handles_get_info(void)
     feed_line(&controller, "OK", 90U);
     feed_line(&controller, "OK", 100U);
     feed_line(&controller, "OK", 105U);
+    feed_line(&controller, "OK", 106U);
 
     assert(strcmp(capture.tx, expected_setup) == 0);
     assert(esp_at_controller_state(&controller) == ESP_AT_STATE_ONLINE);
@@ -129,12 +132,20 @@ static void test_connects_in_order_and_handles_get_info(void)
     feed_line(&controller, "OK", 121U);
     assert(strstr(capture.tx, "\\\"ota_state\\\":\\\"DOWNLOADING\\\"") != NULL);
     feed_line(&controller, "OK", 122U);
+    assert(strstr(capture.tx, "AT+HTTPCHEAD=0\r\n") != NULL);
+    feed_line(&controller, "OK", 123U);
     assert(strstr(capture.tx,
                   "AT+HTTPGETSIZE=\"https://thingsboard.cloud/api/v1/"
                   "DeviceToken/firmware?title=TM4C123GXL&version=1.0.1\"") !=
            NULL);
-    feed_line(&controller, "+HTTPGETSIZE:332", 123U);
-    feed_line(&controller, "OK", 124U);
+    feed_line(&controller, "+HTTPGETSIZE:1400", 124U);
+    feed_line(&controller, "OK", 125U);
+    assert(strstr(capture.tx,
+                  "AT+HTTPCHEAD=17\r\n") != NULL);
+    feed_line(&controller, "OK", 126U);
+    esp_at_controller_receive(&controller, '>', 127U);
+    assert(strstr(capture.tx, "Range: bytes=0-31") != NULL);
+    feed_line(&controller, "OK", 128U);
     assert(strstr(capture.tx,
                   "AT+HTTPCGET=\"https://thingsboard.cloud/api/v1/"
                   "DeviceToken/firmware?title=TM4C123GXL&version=1.0.1\"") !=
@@ -154,6 +165,7 @@ static void test_mqtt_clean_error_still_allows_configuration(void)
     feed_line(&controller, "OK", 20U);
     feed_line(&controller, "OK", 30U);
     feed_line(&controller, "OK", 40U);
+    feed_line(&controller, "OK", 45U);
 
     assert(strstr(capture.tx, "AT+MQTTCLEAN=0\r\n") != NULL);
     feed_line(&controller, "ERROR", 50U);
@@ -194,13 +206,14 @@ static void test_wifi_join_allows_disconnect_notice_and_longer_timeout(void)
     feed_line(&controller, "OK", 10U);
     feed_line(&controller, "OK", 20U);
     feed_line(&controller, "OK", 30U);
+    feed_line(&controller, "OK", 35U);
     assert(esp_at_controller_state(&controller) == ESP_AT_STATE_WIFI_JOIN);
 
     feed_line(&controller, "WIFI DISCONNECTED", 40U);
     assert(esp_at_controller_state(&controller) == ESP_AT_STATE_WIFI_JOIN);
     esp_at_controller_tick(&controller, ESP_AT_COMMAND_TIMEOUT_MS + 100U);
     assert(esp_at_controller_state(&controller) == ESP_AT_STATE_WIFI_JOIN);
-    esp_at_controller_tick(&controller, 30031U);
+    esp_at_controller_tick(&controller, 30036U);
     assert(esp_at_controller_state(&controller) == ESP_AT_STATE_RETRY);
 }
 
@@ -218,6 +231,113 @@ static void test_error_log_identifies_current_state(void)
     assert(strstr(capture.log, "AT_ERROR_SYNC") != NULL);
 }
 
+static void test_at_error_code_is_forwarded_to_log(void)
+{
+    capture_t capture = {{0}, {0}, 0U, {0U, 0U, 0U}};
+    esp_at_controller_t controller;
+    esp_at_controller_config_t config = test_config();
+
+    esp_at_controller_init(&controller, &config, capture_tx, capture_log,
+                           &capture, 0U);
+    feed_line(&controller, "ERR CODE:0x010a7000", 10U);
+    assert(strstr(capture.log, "ERR CODE:0x010a7000") != NULL);
+    assert(strstr(capture.log, "SecretPassword") == NULL);
+    assert(strstr(capture.log, "DeviceToken") == NULL);
+}
+
+static void test_invalid_cloud_header_reports_specific_failure(void)
+{
+    capture_t capture = {{0}, {0}, 0U, {0U, 0U, 0U}};
+    esp_at_controller_t controller;
+    esp_at_controller_config_t config = test_config();
+    bl_update_t update = {0};
+    unsigned i;
+
+    esp_at_controller_init(&controller, &config, capture_tx, capture_log,
+                           &capture, 0U);
+    esp_at_controller_attach_update(&controller, &update);
+    controller.requested_version = (ota_version_t){1U, 0U, 1U};
+    controller.state = ESP_AT_STATE_OTA_SIZE;
+    controller.command_sent = 1;
+    feed_line(&controller, "+HTTPGETSIZE:1400", 10U);
+    feed_line(&controller, "OK", 11U);
+    feed_line(&controller, "OK", 12U);
+    esp_at_controller_receive(&controller, '>', 13U);
+    feed_line(&controller, "OK", 14U);
+    for (i = 0U; i < sizeof("+HTTPCGET:") - 1U; ++i) {
+        esp_at_controller_receive(&controller,
+                                  (unsigned char)"+HTTPCGET:"[i], 15U);
+    }
+    for (i = 0U; i < 3U; ++i) {
+        esp_at_controller_receive(&controller,
+                                  (unsigned char)"32,"[i], 15U);
+    }
+    for (i = 0U; i < sizeof(ota_firmware_header_t); ++i) {
+        esp_at_controller_receive(&controller, 0U, 15U);
+    }
+    assert(strstr(capture.log, "OTA_HEADER_FAILED") != NULL);
+}
+
+static void test_completed_http_chunk_requests_next_range(void)
+{
+    capture_t capture = {{0}, {0}, 0U, {0U, 0U, 0U}};
+    esp_at_controller_t controller;
+    esp_at_controller_config_t config = test_config();
+
+    esp_at_controller_init(&controller, &config, capture_tx, capture_log,
+                           &capture, 0U);
+    controller.state = ESP_AT_STATE_OTA_DOWNLOAD;
+    controller.command_sent = 1;
+    controller.remote_size = 1400U;
+    controller.ota_offset = 0U;
+    controller.ota_chunk_size = sizeof(ota_firmware_header_t);
+    controller.ota_chunk_complete = 1;
+
+    feed_line(&controller, "OK", 10U);
+    assert(controller.ota_offset == sizeof(ota_firmware_header_t));
+    assert(controller.ota_chunk_size == 256U);
+    assert(strstr(capture.tx, "AT+HTTPCHEAD=19\r\n") != NULL);
+    feed_line(&controller, "OK", 11U);
+    esp_at_controller_receive(&controller, '>', 12U);
+    assert(strstr(capture.tx, "Range: bytes=32-287") != NULL);
+}
+
+static void test_all_cloud_transfer_states_are_active(void)
+{
+    esp_at_controller_t controller = {0};
+
+    controller.state = ESP_AT_STATE_OTA_CLEAR_HEADER;
+    assert(esp_at_controller_ota_active(&controller));
+    controller.state = ESP_AT_STATE_OTA_SIZE;
+    assert(esp_at_controller_ota_active(&controller));
+    controller.state = ESP_AT_STATE_OTA_RANGE_HEADER;
+    assert(esp_at_controller_ota_active(&controller));
+    controller.state = ESP_AT_STATE_OTA_DOWNLOAD;
+    assert(esp_at_controller_ota_active(&controller));
+    controller.state = ESP_AT_STATE_ONLINE;
+    assert(!esp_at_controller_ota_active(&controller));
+}
+
+static void test_range_stops_at_payload_boundary(void)
+{
+    capture_t capture = {{0}, {0}, 0U, {0U, 0U, 0U}};
+    esp_at_controller_t controller;
+    esp_at_controller_config_t config = test_config();
+
+    esp_at_controller_init(&controller, &config, capture_tx, capture_log,
+                           &capture, 0U);
+    controller.state = ESP_AT_STATE_OTA_DOWNLOAD;
+    controller.command_sent = 1;
+    controller.remote_size = 1400U;
+    controller.ota_offset = 544U;
+    controller.ota_chunk_size = 256U;
+    controller.ota_chunk_complete = 1;
+
+    feed_line(&controller, "OK", 10U);
+    assert(controller.ota_offset == 800U);
+    assert(controller.ota_chunk_size == 224U);
+}
+
 int main(void)
 {
     test_connects_in_order_and_handles_get_info();
@@ -225,6 +345,11 @@ int main(void)
     test_timeout_retries_without_exposing_secrets();
     test_wifi_join_allows_disconnect_notice_and_longer_timeout();
     test_error_log_identifies_current_state();
+    test_at_error_code_is_forwarded_to_log();
+    test_invalid_cloud_header_reports_specific_failure();
+    test_completed_http_chunk_requests_next_range();
+    test_all_cloud_transfer_states_are_active();
+    test_range_stops_at_payload_boundary();
     puts("esp_at_controller tests passed");
     return 0;
 }

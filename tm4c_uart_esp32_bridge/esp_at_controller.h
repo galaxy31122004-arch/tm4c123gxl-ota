@@ -15,6 +15,7 @@
 typedef enum {
     ESP_AT_STATE_SYNC = 0,
     ESP_AT_STATE_ECHO_OFF,
+    ESP_AT_STATE_SYSLOG,
     ESP_AT_STATE_WIFI_MODE,
     ESP_AT_STATE_WIFI_JOIN,
     ESP_AT_STATE_MQTT_CLEAN,
@@ -23,7 +24,9 @@ typedef enum {
     ESP_AT_STATE_MQTT_SUBSCRIBE,
     ESP_AT_STATE_MQTT_ANNOUNCE,
     ESP_AT_STATE_ONLINE,
+    ESP_AT_STATE_OTA_CLEAR_HEADER,
     ESP_AT_STATE_OTA_SIZE,
+    ESP_AT_STATE_OTA_RANGE_HEADER,
     ESP_AT_STATE_OTA_DOWNLOAD,
     ESP_AT_STATE_RETRY
 } esp_at_state_t;
@@ -56,6 +59,8 @@ typedef struct {
     int http_binary;
     int ota_size_pending;
     int ota_body_pending;
+    int range_header_stage;
+    int ota_chunk_complete;
     int ota_telemetry_pending;
     int ota_requested;
     int boot_confirmed;
@@ -63,9 +68,12 @@ typedef struct {
     unsigned retry_count;
     bl_update_t *update;
     cloud_ota_t cloud_ota;
+    cloud_ota_result_t cloud_result;
     esp_at_http_stream_t http_stream;
     char firmware_url[256];
     size_t remote_size;
+    size_t ota_offset;
+    size_t ota_chunk_size;
     ota_version_t requested_version;
     char line[ESP_AT_LINE_SIZE];
 } esp_at_controller_t;
@@ -88,5 +96,6 @@ void esp_at_controller_attach_update(esp_at_controller_t *controller,
 void esp_at_controller_set_boot_confirmed(esp_at_controller_t *controller,
                                           int confirmed);
 esp_at_state_t esp_at_controller_state(const esp_at_controller_t *controller);
+int esp_at_controller_ota_active(const esp_at_controller_t *controller);
 
 #endif
