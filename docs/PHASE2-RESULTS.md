@@ -8,7 +8,7 @@ Date: 2026-08-27
 - Firmware metadata validation enforces version, positive size, checksum/file fields and ISO release date.
 - Simulator scenarios `success`, `error`, and `rollback` emit deterministic JSON payloads.
 - Dashboard template contains device, firmware, slot, OTA state, progress and error widgets.
-- Python tests: 15 passed.
+- Python tests: 16 passed.
 - Host CTest: 11/11 passed.
 
 Run the simulator locally:
@@ -32,6 +32,10 @@ ota_progress      100
 ota_state         SUCCESS
 ota_error         0
 ```
+
+The `error` scenario was accepted with `ota_state=ERROR`, `ota_error=2`.
+The `rollback` scenario was accepted with `ota_state=ROLLBACK`, `ota_error=9`,
+`active_slot=A`, and `app_version=1.0.0`.
 
 Dashboard widget setup and RPC round-trip remain pending. The simulator supports
 broker publishing with:
