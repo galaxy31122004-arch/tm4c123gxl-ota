@@ -104,3 +104,14 @@ add_executable(test_esp_at_rpc tests/c/test_esp_at_rpc.c)
 target_link_libraries(test_esp_at_rpc PRIVATE esp_at_rpc)
 tm4c_host_enable_strict_warnings(test_esp_at_rpc)
 add_test(NAME esp_at_rpc COMMAND test_esp_at_rpc)
+
+add_library(esp_at_controller STATIC
+    tm4c_uart_esp32_bridge/esp_at_controller.c
+)
+target_include_directories(esp_at_controller PUBLIC tm4c_uart_esp32_bridge)
+target_link_libraries(esp_at_controller PUBLIC esp_at_rpc)
+tm4c_host_enable_strict_warnings(esp_at_controller)
+add_executable(test_esp_at_controller tests/c/test_esp_at_controller.c)
+target_link_libraries(test_esp_at_controller PRIVATE esp_at_controller)
+tm4c_host_enable_strict_warnings(test_esp_at_controller)
+add_test(NAME esp_at_controller COMMAND test_esp_at_controller)
