@@ -65,12 +65,15 @@ ThingsBoard da gui `GET_INFO` den device that va nhan response dung hai lan:
 {"app_version":"1.0.0","bootloader_version":"1.0.0","active_slot":"A"}
 ```
 
-## Con lai
+## Ket qua
 
-- COM7 hien `RPC_GET_INFO_RESPONSE_SENT`.
+- COM7 khoi dong voi `UART0_READY`, `UART1_READY`,
+  `TM4C_ESP_AT_BOOTLOADER_RPC`, va `MQTT_RPC_READY`.
+- Trong luc ThingsBoard gui `GET_INFO`, COM7 hien
+  `RPC_GET_INFO_RESPONSE_SENT`.
+- ThingsBoard tra dung version va active slot trong cung luot RPC.
 
-Day la gate bang chung duy nhat de ket thuc Phase 2. Cho den khi co log tren,
-Phase 2 van la **IN PROGRESS**.
+Phase 2: **PASS**. Cong viec tiep theo nam trong Phase 3.
 
 ## Ngoai pham vi
 

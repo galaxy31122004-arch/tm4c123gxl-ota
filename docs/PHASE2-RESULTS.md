@@ -57,11 +57,31 @@ returned the device response:
 {"app_version":"1.0.0","bootloader_version":"1.0.0","active_slot":"A"}
 ```
 
-This verifies the ThingsBoard request/response path. A COM7 capture was opened
-before the second request, but it remained empty and did not contain the expected
-`RPC_GET_INFO_RESPONSE_SENT` diagnostic. Phase 2 therefore remains in progress
-until that hardware diagnostic evidence is captured after reset. Simulator-only
-evidence is not used for this result.
+This verifies the ThingsBoard request/response path. After resetting the TM4C
+with COM7 capture active, the firmware reported:
+
+```text
+UART0_READY
+UART1_READY
+TM4C_ESP_AT_BOOTLOADER_RPC
+MQTT_RPC_READY
+```
+
+A subsequent `GET_INFO` request returned the same cloud response while COM7
+reported `RPC_GET_INFO_RESPONSE_SENT`. The cloud response and hardware diagnostic
+were therefore observed in the same test window. Simulator-only evidence is not
+used for this result.
+
+## Phase 2 Status
+
+```text
+Cloud device/attributes: PASS
+Telemetry/dashboard:     PASS
+Simulator scenarios:     PASS
+ESP-AT MQTT hardware:    PASS
+GET_INFO round-trip:     PASS
+Phase 2 overall:         PASS
+```
 
 The simulator supports broker publishing with:
 

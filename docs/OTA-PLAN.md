@@ -11,7 +11,7 @@ Cap nhat: 2026-08-27
 | Phase | Trang thai | Da hoan thanh | Con lai |
 | --- | --- | --- | --- |
 | Phase 1 - TM4C bootloader | PASS | Build, memory map, protocol, flash that, UART OTA A/B, confirmation, rollback va fault test vat ly | Khong con gate Phase 1 |
-| Phase 2 - ESP-AT va ThingsBoard contract | IN PROGRESS | Device, attributes, telemetry, dashboard, simulator, SUCCESS/ERROR/ROLLBACK, ESP-AT MQTT session va cloud RPC response | Thu log `RPC_GET_INFO_RESPONSE_SENT` tren COM7 de hoan tat bang chung hardware |
+| Phase 2 - ESP-AT va ThingsBoard contract | PASS | Device, attributes, telemetry, dashboard, simulator, SUCCESS/ERROR/ROLLBACK, ESP-AT MQTT va `GET_INFO` hai chieu | Khong con gate Phase 2 |
 | Phase 3 - Cloud firmware OTA end-to-end | NOT STARTED | Chua co | Tai `.bin` tu cloud, kiem tra image, truyen UART vao bootloader, reboot/confirm/rollback, TLS |
 
 ## Kien truc dich
@@ -56,7 +56,7 @@ Bang chung: [PHASE1-RESULTS.md](PHASE1-RESULTS.md).
 
 ## Phase 2 - ESP-AT va ThingsBoard
 
-Trang thai: **IN PROGRESS**.
+Trang thai: **PASS**.
 
 Da xac minh:
 
@@ -75,13 +75,9 @@ RPC cloud da duoc xac minh hai lan qua ThingsBoard REST API tren dung device:
 {"app_version":"1.0.0","bootloader_version":"1.0.0","active_slot":"A"}
 ```
 
-Bang chung con lai:
-
-1. Reset/capture UART0 va gui lai server-side RPC.
-2. Thu duoc `RPC_GET_INFO_RESPONSE_SENT` tren COM7.
-
-Khong danh dau Phase 2 PASS truoc khi co bang chung COM7 theo tieu chi da chot.
-Bang chung: [PHASE2-RESULTS.md](PHASE2-RESULTS.md).
+COM7 da thu duoc `RPC_GET_INFO_RESPONSE_SENT` trong cung luot ThingsBoard tra
+response. Phase 2 da dat day du tieu chi cloud va hardware. Bang chung:
+[PHASE2-RESULTS.md](PHASE2-RESULTS.md).
 
 ## Phase 3 - Cloud firmware OTA end-to-end
 
