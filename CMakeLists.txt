@@ -105,11 +105,32 @@ target_link_libraries(test_esp_at_rpc PRIVATE esp_at_rpc)
 tm4c_host_enable_strict_warnings(test_esp_at_rpc)
 add_test(NAME esp_at_rpc COMMAND test_esp_at_rpc)
 
+add_library(esp_at_http STATIC tm4c_uart_esp32_bridge/esp_at_http.c)
+target_include_directories(esp_at_http PUBLIC tm4c_uart_esp32_bridge)
+tm4c_host_enable_strict_warnings(esp_at_http)
+add_executable(test_esp_at_http tests/c/test_esp_at_http.c)
+target_link_libraries(test_esp_at_http PRIVATE esp_at_http)
+tm4c_host_enable_strict_warnings(test_esp_at_http)
+add_test(NAME esp_at_http COMMAND test_esp_at_http)
+
+add_library(cloud_ota STATIC tm4c_uart_esp32_bridge/cloud_ota.c)
+target_include_directories(cloud_ota PUBLIC
+    tm4c_uart_esp32_bridge
+    tm4c123gxl/bootloader/inc
+    tm4c123gxl/common/inc
+)
+target_link_libraries(cloud_ota PUBLIC bl_update_host ota_common)
+tm4c_host_enable_strict_warnings(cloud_ota)
+add_executable(test_cloud_ota tests/c/test_cloud_ota.c)
+target_link_libraries(test_cloud_ota PRIVATE cloud_ota)
+tm4c_host_enable_strict_warnings(test_cloud_ota)
+add_test(NAME cloud_ota COMMAND test_cloud_ota)
+
 add_library(esp_at_controller STATIC
     tm4c_uart_esp32_bridge/esp_at_controller.c
 )
 target_include_directories(esp_at_controller PUBLIC tm4c_uart_esp32_bridge)
-target_link_libraries(esp_at_controller PUBLIC esp_at_rpc)
+target_link_libraries(esp_at_controller PUBLIC esp_at_rpc esp_at_http cloud_ota)
 tm4c_host_enable_strict_warnings(esp_at_controller)
 add_executable(test_esp_at_controller tests/c/test_esp_at_controller.c)
 target_link_libraries(test_esp_at_controller PRIVATE esp_at_controller)

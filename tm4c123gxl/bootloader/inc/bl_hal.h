@@ -19,6 +19,8 @@ ota_error_t bl_hal_flash_erase(uint32_t address, size_t length, ota_slot_t activ
 ota_error_t bl_hal_flash_program(uint32_t address, const void *src, size_t length, ota_slot_t active);
 int bl_hal_uart1_read(uint8_t *byte, uint32_t timeout_ms);
 void bl_hal_uart1_write(uint8_t byte);
+int bl_hal_esp_read(uint8_t *byte, uint32_t timeout_ms);
+void bl_hal_esp_write(uint8_t byte);
 void bl_hal_uart_wait_tx_complete(void);
 void bl_hal_uart0_log(const char *message);
 

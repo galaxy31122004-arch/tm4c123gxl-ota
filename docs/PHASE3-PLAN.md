@@ -61,7 +61,7 @@ ESP32 không quyết định active slot hoặc rollback. Các quyết định b
 ```text
 ESP32              : ESP32 DevKit V1
 ESP32 firmware     : ESP-AT thuần túy
-ESP-AT version     : v4.2
+ESP-AT version     : v4.1.1.0
 UART TM4C <-> ESP32: 115200 baud
 Logic level        : 3.3 V
 Cloud              : ThingsBoard Cloud

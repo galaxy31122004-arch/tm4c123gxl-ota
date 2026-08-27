@@ -1,6 +1,6 @@
 --retain=g_pfnVectors
 --entry_point=ResetISR
---stack_size=1024
+--stack_size=2048
 MEMORY
 {
     FLASH (RX) : origin = 0x00000000, length = 0x00008000

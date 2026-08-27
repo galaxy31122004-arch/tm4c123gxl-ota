@@ -81,6 +81,8 @@ ota_error_t bl_hal_flash_program(uint32_t a, const void *src, size_t n, ota_slot
 }
 int bl_hal_uart1_read(uint8_t *b, uint32_t t) { uint32_t start=bl_hal_millis(); while (!UARTCharsAvail(UART0_BASE) && !UARTCharsAvail(UART1_BASE)) { if ((uint32_t)(bl_hal_millis()-start)>=t) return 0; } if (UARTCharsAvail(UART0_BASE)) g_transport_uart=UART0_BASE; else g_transport_uart=UART1_BASE; *b=(uint8_t)UARTCharGetNonBlocking(g_transport_uart); return 1; }
 void bl_hal_uart1_write(uint8_t b) { UARTCharPut(g_transport_uart,b); }
+int bl_hal_esp_read(uint8_t *b, uint32_t t) { uint32_t start=bl_hal_millis(); while (!UARTCharsAvail(UART1_BASE)) { if ((uint32_t)(bl_hal_millis()-start)>=t) return 0; } *b=(uint8_t)UARTCharGetNonBlocking(UART1_BASE); return 1; }
+void bl_hal_esp_write(uint8_t b) { UARTCharPut(UART1_BASE,b); }
 void bl_hal_uart_wait_tx_complete(void) { while (UARTBusy(g_transport_uart)) {} }
 void bl_hal_uart0_log(const char *m) { while (*m) UARTCharPut(UART0_BASE,*m++); }
 #else
@@ -92,6 +94,8 @@ ota_error_t bl_hal_flash_erase(uint32_t a,size_t n,ota_slot_t s) { return bl_fla
 ota_error_t bl_hal_flash_program(uint32_t a,const void *d,size_t n,ota_slot_t s) { (void)d; return bl_flash_range_allowed(a,n,s,BL_FLASH_PROGRAM)?OTA_ERROR_NONE:OTA_ERROR_FLASH_PROGRAM; }
 int bl_hal_uart1_read(uint8_t *b,uint32_t t) {(void)b;(void)t;return 0;}
 void bl_hal_uart1_write(uint8_t b){(void)b;}
+int bl_hal_esp_read(uint8_t *b,uint32_t t){(void)b;(void)t;return 0;}
+void bl_hal_esp_write(uint8_t b){(void)b;}
 void bl_hal_uart_wait_tx_complete(void){}
 void bl_hal_uart0_log(const char *m){(void)m;}
 #endif

@@ -6,6 +6,11 @@
 #include "ota_boot.h"
 #include "boot_confirm.h"
 
+#if defined(BL_ENABLE_CLOUD_OTA)
+#include "esp_at_controller.h"
+#include "phase3_config.h"
+#endif
+
 extern void bl_hal_init(void);
 extern void bl_jump_to_image(uint32_t vector_address);
 
@@ -50,6 +55,22 @@ static void uart_response(const ota_packet_t *packet)
     if (ota_packet_encode(packet, frame, sizeof(frame), &length) == OTA_PROTOCOL_OK)
         for (index = 0u; index < length; ++index) bl_hal_uart1_write(frame[index]);
 }
+#if defined(BL_ENABLE_CLOUD_OTA)
+static void cloud_tx(const char *data, size_t length, void *context)
+{
+    size_t index;
+    (void)context;
+    for (index = 0U; index < length; ++index) {
+        bl_hal_esp_write((uint8_t)data[index]);
+    }
+}
+static void cloud_log(const char *message, void *context)
+{
+    (void)context;
+    bl_hal_uart0_log(message);
+    bl_hal_uart0_log("\r\n");
+}
+#endif
 void bl_services_init(bl_services_t *services)
 {
     if (services == NULL) return;
@@ -62,9 +83,23 @@ void bl_services_init(bl_services_t *services)
 }
 void bl_main(void)
 {
-    ota_metadata_record_t metadata; unsigned selected = 0u; bl_services_t services; bl_update_t update; ota_parser_t parser; ota_packet_t request, response;
+    ota_metadata_record_t metadata; unsigned selected = 0u;
+    static bl_services_t services;
+    static bl_update_t update;
+    static ota_parser_t parser;
+    static ota_packet_t request;
+    static ota_packet_t response;
     ota_confirmation_t confirmation; ota_confirmation_t *confirmation_ptr = NULL; ota_slot_t confirmed_slot; ota_version_t confirmed_version;
     ota_boot_result_t boot_result; uint32_t update_window_start;
+#if defined(BL_ENABLE_CLOUD_OTA)
+    static esp_at_controller_t controller;
+    const esp_at_controller_config_t cloud_config = {
+        WIFI_SSID, WIFI_PASSWORD, THINGSBOARD_TOKEN, PHASE3_MQTT_HOST,
+        PHASE3_MQTT_PORT, PHASE3_DEVICE_MODEL
+    };
+    int cloud_enabled;
+    int confirmation_accepted;
+#endif
     bl_hal_init();
     bl_hal_uart0_log("BL_READY\r\n");
     bl_services_init(&services);
@@ -74,11 +109,62 @@ void bl_main(void)
         confirmation.slot = confirmed_slot; confirmation.version = confirmed_version; confirmation_ptr = &confirmation;
     }
     boot_result = ota_boot_decide(&services.metadata, confirmation_ptr, image_probe, NULL);
+#if defined(BL_ENABLE_CLOUD_OTA)
+    confirmation_accepted = confirmation_ptr != NULL &&
+        services.metadata.pending_slot == OTA_SLOT_NONE &&
+        services.metadata.active_slot == (uint8_t)confirmed_slot &&
+        ((confirmed_slot == OTA_SLOT_A &&
+          memcmp(&services.metadata.slot_a.version, &confirmed_version,
+                 sizeof(confirmed_version)) == 0) ||
+         (confirmed_slot == OTA_SLOT_B &&
+          memcmp(&services.metadata.slot_b.version, &confirmed_version,
+                 sizeof(confirmed_version)) == 0));
+#endif
     if (boot_result.commit_required) { ota_metadata_finalize(&services.metadata); (void)ota_metadata_commit(&services.metadata_io, &services.metadata, services.metadata_copy); }
     bl_update_init(&update, &services); ota_parser_init(&parser); update_window_start = bl_hal_millis();
-    for (;;) { uint8_t byte; uint32_t now = bl_hal_millis(); bl_update_poll(&update, now); bl_hal_watchdog_service();
-        if (bl_hal_uart1_read(&byte, 10u) != 0 && ota_parser_consume(&parser, byte, now, &request) == OTA_PARSE_PACKET) { bl_update_handle(&update, &request, &response); bl_update_note_activity(&update, bl_hal_millis()); uart_response(&response); if (update.state == BL_UPDATE_READY_TO_BOOT) { boot_confirmation_clear(); bl_hal_uart_wait_tx_complete(); bl_hal_reset(); } }
-        if (update.state == BL_UPDATE_IDLE && (uint32_t)(now - update_window_start) >= UINT32_C(60000)) {
+#if defined(BL_ENABLE_CLOUD_OTA)
+    cloud_enabled = WIFI_SSID[0] != '\0' && THINGSBOARD_TOKEN[0] != '\0';
+    if (cloud_enabled) {
+        esp_at_controller_init(&controller, &cloud_config, cloud_tx, cloud_log,
+                               NULL, update_window_start);
+        esp_at_controller_attach_update(&controller, &update);
+        esp_at_controller_set_boot_confirmed(&controller,
+                                             confirmation_accepted);
+    }
+#endif
+    for (;;) { uint8_t byte; uint32_t now = bl_hal_millis();
+#if defined(BL_ENABLE_CLOUD_OTA)
+        if (!cloud_enabled ||
+            (esp_at_controller_state(&controller) != ESP_AT_STATE_OTA_SIZE &&
+             esp_at_controller_state(&controller) != ESP_AT_STATE_OTA_DOWNLOAD))
+#endif
+        bl_update_poll(&update, now);
+        bl_hal_watchdog_service();
+        if (
+#if defined(BL_ENABLE_CLOUD_OTA)
+            (cloud_enabled ? bl_hal_esp_read(&byte, 10u) :
+                             bl_hal_uart1_read(&byte, 10u))
+#else
+            bl_hal_uart1_read(&byte, 10u)
+#endif
+            != 0) {
+#if defined(BL_ENABLE_CLOUD_OTA)
+            if (cloud_enabled) esp_at_controller_receive(&controller, byte, now);
+            else
+#endif
+            if (ota_parser_consume(&parser, byte, now, &request) == OTA_PARSE_PACKET) { bl_update_handle(&update, &request, &response); bl_update_note_activity(&update, bl_hal_millis()); uart_response(&response); }
+        }
+#if defined(BL_ENABLE_CLOUD_OTA)
+        if (cloud_enabled) esp_at_controller_tick(&controller, now);
+#endif
+        if (update.state == BL_UPDATE_READY_TO_BOOT) { boot_confirmation_clear(); bl_hal_uart_wait_tx_complete(); bl_hal_reset(); }
+        if (update.state == BL_UPDATE_IDLE &&
+#if defined(BL_ENABLE_CLOUD_OTA)
+            (!cloud_enabled ||
+             (esp_at_controller_state(&controller) != ESP_AT_STATE_OTA_SIZE &&
+              esp_at_controller_state(&controller) != ESP_AT_STATE_OTA_DOWNLOAD)) &&
+#endif
+            (uint32_t)(now - update_window_start) >= UINT32_C(60000)) {
             if (boot_result.decision == OTA_BOOT_SLOT_A) bl_jump_to_image(OTA_SLOT_A_PAYLOAD_START);
             if (boot_result.decision == OTA_BOOT_SLOT_B) bl_jump_to_image(OTA_SLOT_B_PAYLOAD_START);
             update_window_start = now;

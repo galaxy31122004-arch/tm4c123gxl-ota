@@ -7,7 +7,17 @@
 typedef struct {
     char tx[2048];
     char log[1024];
+    unsigned ota_starts;
+    esp_at_rpc_version_t ota_version;
 } capture_t;
+
+static int capture_ota_start(const esp_at_rpc_version_t *version, void *context)
+{
+    capture_t *capture = context;
+    ++capture->ota_starts;
+    capture->ota_version = *version;
+    return 1;
+}
 
 static void capture_tx(const char *data, size_t length, void *context)
 {
@@ -71,8 +81,9 @@ static void test_connects_in_order_and_handles_get_info(void)
         "\\\"bootloader_version\\\":\\\"1.0.0\\\"\\,"
         "\\\"active_slot\\\":\\\"A\\\"\\,"
         "\\\"ota_error\\\":0}\",0,0\r\n";
-    capture_t capture = {{0}, {0}};
+    capture_t capture = {{0}, {0}, 0U, {0U, 0U, 0U}};
     esp_at_controller_t controller;
+    bl_update_t update = {0};
     esp_at_controller_config_t config = test_config();
 
     esp_at_controller_init(&controller, &config, capture_tx, capture_log,
@@ -104,11 +115,35 @@ static void test_connects_in_order_and_handles_get_info(void)
                   "\\\"active_slot\\\":\\\"A\\\"}\",0,0\r\n") != NULL);
     assert(strstr(capture.log, "SecretPassword") == NULL);
     assert(strstr(capture.log, "DeviceToken") == NULL);
+
+    esp_at_controller_set_ota_start(&controller, capture_ota_start, &capture);
+    esp_at_controller_attach_update(&controller, &update);
+    feed_line(&controller,
+              "+MQTTSUBRECV:0,\"v1/devices/me/rpc/request/81\",51,"
+              "{\"method\":\"START_OTA\",\"params\":{\"version\":\"1.0.1\"}}",
+              120U);
+    assert(capture.ota_starts == 1U);
+    assert(capture.ota_version.patch == 1U);
+    assert(strstr(capture.tx,
+                  "v1/devices/me/rpc/response/81\",\"{\\\"accepted\\\":true}") != NULL);
+    feed_line(&controller, "OK", 121U);
+    assert(strstr(capture.tx, "\\\"ota_state\\\":\\\"DOWNLOADING\\\"") != NULL);
+    feed_line(&controller, "OK", 122U);
+    assert(strstr(capture.tx,
+                  "AT+HTTPGETSIZE=\"https://thingsboard.cloud/api/v1/"
+                  "DeviceToken/firmware?title=TM4C123GXL&version=1.0.1\"") !=
+           NULL);
+    feed_line(&controller, "+HTTPGETSIZE:332", 123U);
+    feed_line(&controller, "OK", 124U);
+    assert(strstr(capture.tx,
+                  "AT+HTTPCGET=\"https://thingsboard.cloud/api/v1/"
+                  "DeviceToken/firmware?title=TM4C123GXL&version=1.0.1\"") !=
+           NULL);
 }
 
 static void test_mqtt_clean_error_still_allows_configuration(void)
 {
-    capture_t capture = {{0}, {0}};
+    capture_t capture = {{0}, {0}, 0U, {0U, 0U, 0U}};
     esp_at_controller_t controller;
     esp_at_controller_config_t config = test_config();
 
@@ -128,7 +163,7 @@ static void test_mqtt_clean_error_still_allows_configuration(void)
 
 static void test_timeout_retries_without_exposing_secrets(void)
 {
-    capture_t capture = {{0}, {0}};
+    capture_t capture = {{0}, {0}, 0U, {0U, 0U, 0U}};
     esp_at_controller_t controller;
     esp_at_controller_config_t config = test_config();
 
@@ -149,7 +184,7 @@ static void test_timeout_retries_without_exposing_secrets(void)
 
 static void test_wifi_join_allows_disconnect_notice_and_longer_timeout(void)
 {
-    capture_t capture = {{0}, {0}};
+    capture_t capture = {{0}, {0}, 0U, {0U, 0U, 0U}};
     esp_at_controller_t controller;
     esp_at_controller_config_t config = test_config();
 
@@ -171,7 +206,7 @@ static void test_wifi_join_allows_disconnect_notice_and_longer_timeout(void)
 
 static void test_error_log_identifies_current_state(void)
 {
-    capture_t capture = {{0}, {0}};
+    capture_t capture = {{0}, {0}, 0U, {0U, 0U, 0U}};
     esp_at_controller_t controller;
     esp_at_controller_config_t config = test_config();
 

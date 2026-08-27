@@ -8,7 +8,7 @@ if (!(Test-Path $TivaWareRoot)) { throw "TivaWare root not found: $TivaWareRoot"
 $artifacts = Join-Path $root 'artifacts'; $objects = Join-Path $artifacts 'obj'
 New-Item -ItemType Directory -Force $objects | Out-Null
 $base = @('--target=arm-ti-none-eabi','-mcpu=cortex-m4','-mthumb','-Oz','-fshort-wchar','-std=c11','-D__TI_ARM__','-DPART_TM4C123GH6PM')
-$includes = @("-I$root\tm4c123gxl\common\inc","-I$root\tm4c123gxl\bootloader\inc","-I$root\tm4c123gxl\application\inc","-I$TivaWareRoot")
+$includes = @("-I$root\tm4c123gxl\common\inc","-I$root\tm4c123gxl\bootloader\inc","-I$root\tm4c123gxl\application\inc","-I$root\tm4c_uart_esp32_bridge","-I$TivaWareRoot")
 function Compile([string]$Source,[string]$Output,[string[]]$Defines=@()) {
     & $cc @base @includes @Defines -c $Source -o $Output
     if ($LASTEXITCODE) { throw "Compile failed: $Source" }
@@ -34,7 +34,9 @@ try {
     Link "$artifacts\application_SlotB_NoConfirm.out" "$artifacts\application_SlotB_NoConfirm.map" 'tm4c123gxl\application\linker\slot_b.cmd' @("$objects\app_crc.o","$objects\app_confirm.o","$objects\app_b_no_confirm_main.o","$objects\app_startup.o")
     $bootObjects = @()
     foreach ($name in @('ota_crc32','ota_protocol','ota_metadata','ota_boot','ota_image')) { $out="$objects\bl_$name.o"; Compile "tm4c123gxl\common\src\$name.c" $out; $bootObjects += $out }
-    foreach ($name in @('bl_hal_tm4c','bl_update','bl_jump','bl_main')) { $out="$objects\$name.o"; Compile "tm4c123gxl\bootloader\src\$name.c" $out @('-DTARGET_IS_TM4C123_RB1'); $bootObjects += $out }
+    foreach ($name in @('bl_hal_tm4c','bl_update','bl_jump')) { $out="$objects\$name.o"; Compile "tm4c123gxl\bootloader\src\$name.c" $out @('-DTARGET_IS_TM4C123_RB1'); $bootObjects += $out }
+    Compile 'tm4c123gxl\bootloader\src\bl_main.c' "$objects\bl_main.o" @('-DTARGET_IS_TM4C123_RB1','-DBL_ENABLE_CLOUD_OTA'); $bootObjects += "$objects\bl_main.o"
+    foreach ($name in @('esp_at_rpc','esp_at_http','cloud_ota','esp_at_controller')) { $out="$objects\$name.o"; Compile "tm4c_uart_esp32_bridge\$name.c" $out @('-DTARGET_IS_TM4C123_RB1'); $bootObjects += $out }
     Compile 'tm4c123gxl\application\src\boot_confirm.c' "$objects\bl_confirm.o"; $bootObjects += "$objects\bl_confirm.o"
     Compile 'tm4c123gxl\bootloader\startup_tm4c123.c' "$objects\bl_startup.o"; $bootObjects += "$objects\bl_startup.o"
     $bootObjects += "$TivaWareRoot\driverlib\ccs\Debug\driverlib.lib"
