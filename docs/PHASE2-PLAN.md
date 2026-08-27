@@ -57,13 +57,19 @@ hien tai chi thuc thi `GET_INFO`; cac command OTA con lai thuoc Phase 3.
 - Host tests cho parser va controller: PASS.
 - TI firmware build va gioi han bootloader 32 KiB: PASS.
 
+## RPC cloud da xac minh
+
+ThingsBoard da gui `GET_INFO` den device that va nhan response dung hai lan:
+
+```json
+{"app_version":"1.0.0","bootloader_version":"1.0.0","active_slot":"A"}
+```
+
 ## Con lai
 
-- ThingsBoard gui `GET_INFO` den dung device that.
 - COM7 hien `RPC_GET_INFO_RESPONSE_SENT`.
-- ThingsBoard nhan response voi cung request ID.
 
-Day la gate duy nhat de ket thuc Phase 2. Cho den khi du ba bang chung tren,
+Day la gate bang chung duy nhat de ket thuc Phase 2. Cho den khi co log tren,
 Phase 2 van la **IN PROGRESS**.
 
 ## Ngoai pham vi

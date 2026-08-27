@@ -11,7 +11,7 @@ Cap nhat: 2026-08-27
 | Phase | Trang thai | Da hoan thanh | Con lai |
 | --- | --- | --- | --- |
 | Phase 1 - TM4C bootloader | PASS | Build, memory map, protocol, flash that, UART OTA A/B, confirmation, rollback va fault test vat ly | Khong con gate Phase 1 |
-| Phase 2 - ESP-AT va ThingsBoard contract | IN PROGRESS | Device, attributes, telemetry, dashboard, simulator, SUCCESS/ERROR/ROLLBACK, ESP-AT MQTT session | RPC `GET_INFO` that tu ThingsBoard xuong TM4C va response cung request ID |
+| Phase 2 - ESP-AT va ThingsBoard contract | IN PROGRESS | Device, attributes, telemetry, dashboard, simulator, SUCCESS/ERROR/ROLLBACK, ESP-AT MQTT session va cloud RPC response | Thu log `RPC_GET_INFO_RESPONSE_SENT` tren COM7 de hoan tat bang chung hardware |
 | Phase 3 - Cloud firmware OTA end-to-end | NOT STARTED | Chua co | Tai `.bin` tu cloud, kiem tra image, truyen UART vao bootloader, reboot/confirm/rollback, TLS |
 
 ## Kien truc dich
@@ -69,16 +69,19 @@ Da xac minh:
   `MQTT_RPC_READY`; telemetry `IDLE` duoc publish khi session san sang.
 - Parser/controller ESP-AT co host tests va firmware nam trong gioi han 32 KiB.
 
-Gate duy nhat con lai:
+RPC cloud da duoc xac minh hai lan qua ThingsBoard REST API tren dung device:
 
-1. Gui server-side RPC `{"method":"GET_INFO","params":{}}` tu ThingsBoard.
-2. TM4C nhan request qua ESP-AT va ghi `RPC_GET_INFO_RESPONSE_SENT` tren COM7.
-3. ThingsBoard nhan response tren `v1/devices/me/rpc/response/{request_id}` voi
-   cung request ID.
-4. Response phai co `app_version`, `bootloader_version`, va `active_slot`.
+```json
+{"app_version":"1.0.0","bootloader_version":"1.0.0","active_slot":"A"}
+```
 
-Khong danh dau Phase 2 PASS truoc khi thay du ca COM7 va response that tren
-ThingsBoard. Bang chung: [PHASE2-RESULTS.md](PHASE2-RESULTS.md).
+Bang chung con lai:
+
+1. Reset/capture UART0 va gui lai server-side RPC.
+2. Thu duoc `RPC_GET_INFO_RESPONSE_SENT` tren COM7.
+
+Khong danh dau Phase 2 PASS truoc khi co bang chung COM7 theo tieu chi da chot.
+Bang chung: [PHASE2-RESULTS.md](PHASE2-RESULTS.md).
 
 ## Phase 3 - Cloud firmware OTA end-to-end
 
