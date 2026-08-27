@@ -20,6 +20,14 @@ def test_esp_at_linker_is_confined_to_phase1_bootloader_region():
         encoding="ascii"
     )
     assert "static esp_at_controller_t controller;" in application
+    assert (
+        "while (!SysCtlPeripheralReady(SYSCTL_PERIPH_GPIOA) ||\n"
+        "           !SysCtlPeripheralReady(SYSCTL_PERIPH_UART0))"
+    ) in application
+    assert (
+        "while (!SysCtlPeripheralReady(SYSCTL_PERIPH_GPIOB) ||\n"
+        "           !SysCtlPeripheralReady(SYSCTL_PERIPH_UART1))"
+    ) in application
 
 
 def test_phase1_slot_a_still_starts_after_bootloader():

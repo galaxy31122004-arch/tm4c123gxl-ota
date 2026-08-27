@@ -60,15 +60,16 @@ static void test_connects_in_order_and_handles_get_info(void)
         "ATE0\r\n"
         "AT+CWMODE=1\r\n"
         "AT+CWJAP=\"LabWifi\",\"SecretPassword\"\r\n"
+        "AT+MQTTCLEAN=0\r\n"
         "AT+MQTTUSERCFG=0,1,\"TM4C123GXL\",\"DeviceToken\",\"\",0,0,\"\"\r\n"
         "AT+MQTTCONN=0,\"thingsboard.cloud\",1883,0\r\n"
         "AT+MQTTSUB=0,\"v1/devices/me/rpc/request/+\",0\r\n"
         "AT+MQTTPUB=0,\"v1/devices/me/telemetry\","
-        "\"{\\\"ota_state\\\":\\\"IDLE\\\","
-        "\\\"ota_progress\\\":0,"
-        "\\\"app_version\\\":\\\"1.0.0\\\","
-        "\\\"bootloader_version\\\":\\\"1.0.0\\\","
-        "\\\"active_slot\\\":\\\"A\\\","
+        "\"{\\\"ota_state\\\":\\\"IDLE\\\"\\,"
+        "\\\"ota_progress\\\":0\\,"
+        "\\\"app_version\\\":\\\"1.0.0\\\"\\,"
+        "\\\"bootloader_version\\\":\\\"1.0.0\\\"\\,"
+        "\\\"active_slot\\\":\\\"A\\\"\\,"
         "\\\"ota_error\\\":0}\",0,0\r\n";
     capture_t capture = {{0}, {0}};
     esp_at_controller_t controller;
@@ -87,6 +88,7 @@ static void test_connects_in_order_and_handles_get_info(void)
     feed_line(&controller, "OK", 80U);
     feed_line(&controller, "OK", 90U);
     feed_line(&controller, "OK", 100U);
+    feed_line(&controller, "OK", 105U);
 
     assert(strcmp(capture.tx, expected_setup) == 0);
     assert(esp_at_controller_state(&controller) == ESP_AT_STATE_ONLINE);
@@ -97,11 +99,31 @@ static void test_connects_in_order_and_handles_get_info(void)
               110U);
     assert(strstr(capture.tx,
                   "AT+MQTTPUB=0,\"v1/devices/me/rpc/response/42\","
-                  "\"{\\\"app_version\\\":\\\"1.0.0\\\","
-                  "\\\"bootloader_version\\\":\\\"1.0.0\\\","
+                  "\"{\\\"app_version\\\":\\\"1.0.0\\\"\\,"
+                  "\\\"bootloader_version\\\":\\\"1.0.0\\\"\\,"
                   "\\\"active_slot\\\":\\\"A\\\"}\",0,0\r\n") != NULL);
     assert(strstr(capture.log, "SecretPassword") == NULL);
     assert(strstr(capture.log, "DeviceToken") == NULL);
+}
+
+static void test_mqtt_clean_error_still_allows_configuration(void)
+{
+    capture_t capture = {{0}, {0}};
+    esp_at_controller_t controller;
+    esp_at_controller_config_t config = test_config();
+
+    esp_at_controller_init(&controller, &config, capture_tx, capture_log,
+                           &capture, 0U);
+    esp_at_controller_tick(&controller, 0U);
+    feed_line(&controller, "OK", 10U);
+    feed_line(&controller, "OK", 20U);
+    feed_line(&controller, "OK", 30U);
+    feed_line(&controller, "OK", 40U);
+
+    assert(strstr(capture.tx, "AT+MQTTCLEAN=0\r\n") != NULL);
+    feed_line(&controller, "ERROR", 50U);
+    assert(strstr(capture.tx, "AT+MQTTUSERCFG=0,1") != NULL);
+    assert(esp_at_controller_state(&controller) != ESP_AT_STATE_RETRY);
 }
 
 static void test_timeout_retries_without_exposing_secrets(void)
@@ -115,6 +137,7 @@ static void test_timeout_retries_without_exposing_secrets(void)
     esp_at_controller_tick(&controller, 0U);
     esp_at_controller_tick(&controller, ESP_AT_COMMAND_TIMEOUT_MS + 1U);
     assert(esp_at_controller_state(&controller) == ESP_AT_STATE_RETRY);
+    assert(strstr(capture.log, "AT_TIMEOUT_SYNC") != NULL);
     esp_at_controller_tick(&controller,
                            ESP_AT_COMMAND_TIMEOUT_MS + ESP_AT_RETRY_DELAY_MS +
                                2U);
@@ -124,10 +147,49 @@ static void test_timeout_retries_without_exposing_secrets(void)
     assert(strstr(capture.log, "DeviceToken") == NULL);
 }
 
+static void test_wifi_join_allows_disconnect_notice_and_longer_timeout(void)
+{
+    capture_t capture = {{0}, {0}};
+    esp_at_controller_t controller;
+    esp_at_controller_config_t config = test_config();
+
+    esp_at_controller_init(&controller, &config, capture_tx, capture_log,
+                           &capture, 0U);
+    esp_at_controller_tick(&controller, 0U);
+    feed_line(&controller, "OK", 10U);
+    feed_line(&controller, "OK", 20U);
+    feed_line(&controller, "OK", 30U);
+    assert(esp_at_controller_state(&controller) == ESP_AT_STATE_WIFI_JOIN);
+
+    feed_line(&controller, "WIFI DISCONNECTED", 40U);
+    assert(esp_at_controller_state(&controller) == ESP_AT_STATE_WIFI_JOIN);
+    esp_at_controller_tick(&controller, ESP_AT_COMMAND_TIMEOUT_MS + 100U);
+    assert(esp_at_controller_state(&controller) == ESP_AT_STATE_WIFI_JOIN);
+    esp_at_controller_tick(&controller, 30031U);
+    assert(esp_at_controller_state(&controller) == ESP_AT_STATE_RETRY);
+}
+
+static void test_error_log_identifies_current_state(void)
+{
+    capture_t capture = {{0}, {0}};
+    esp_at_controller_t controller;
+    esp_at_controller_config_t config = test_config();
+
+    esp_at_controller_init(&controller, &config, capture_tx, capture_log,
+                           &capture, 0U);
+    esp_at_controller_tick(&controller, 0U);
+    feed_line(&controller, "ERROR", 10U);
+    assert(esp_at_controller_state(&controller) == ESP_AT_STATE_RETRY);
+    assert(strstr(capture.log, "AT_ERROR_SYNC") != NULL);
+}
+
 int main(void)
 {
     test_connects_in_order_and_handles_get_info();
+    test_mqtt_clean_error_still_allows_configuration();
     test_timeout_retries_without_exposing_secrets();
+    test_wifi_join_allows_disconnect_notice_and_longer_timeout();
+    test_error_log_identifies_current_state();
     puts("esp_at_controller tests passed");
     return 0;
 }

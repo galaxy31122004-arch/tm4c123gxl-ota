@@ -45,7 +45,8 @@ static void uart0_init(void)
 {
     SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOA);
     SysCtlPeripheralEnable(SYSCTL_PERIPH_UART0);
-    while (!SysCtlPeripheralReady(SYSCTL_PERIPH_UART0)) {
+    while (!SysCtlPeripheralReady(SYSCTL_PERIPH_GPIOA) ||
+           !SysCtlPeripheralReady(SYSCTL_PERIPH_UART0)) {
     }
     GPIOPinConfigure(GPIO_PA0_U0RX);
     GPIOPinConfigure(GPIO_PA1_U0TX);
@@ -60,7 +61,8 @@ static void uart1_init(void)
 {
     SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOB);
     SysCtlPeripheralEnable(SYSCTL_PERIPH_UART1);
-    while (!SysCtlPeripheralReady(SYSCTL_PERIPH_UART1)) {
+    while (!SysCtlPeripheralReady(SYSCTL_PERIPH_GPIOB) ||
+           !SysCtlPeripheralReady(SYSCTL_PERIPH_UART1)) {
     }
     GPIOPinConfigure(GPIO_PB0_U1RX);
     GPIOPinConfigure(GPIO_PB1_U1TX);
@@ -87,7 +89,9 @@ int main(void)
     SysCtlClockSet(SYSCTL_SYSDIV_5 | SYSCTL_USE_PLL |
                    SYSCTL_XTAL_16MHZ | SYSCTL_OSC_MAIN);
     uart0_init();
+    debug_log("UART0_READY", NULL);
     uart1_init();
+    debug_log("UART1_READY", NULL);
     debug_log("TM4C_ESP_AT_BOOTLOADER_RPC", NULL);
 
     if (WIFI_SSID[0] == '\0' || THINGSBOARD_TOKEN[0] == '\0') {

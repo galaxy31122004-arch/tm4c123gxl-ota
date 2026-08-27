@@ -6,11 +6,12 @@
 #include "esp_at_rpc.h"
 
 #define RPC_REQUEST_TOPIC "v1/devices/me/rpc/request/+"
+#define WIFI_JOIN_TIMEOUT_MS 30000U
 #define TELEMETRY_TOPIC "v1/devices/me/telemetry"
 #define ONLINE_TELEMETRY                                                     \
-    "{\\\"ota_state\\\":\\\"IDLE\\\",\\\"ota_progress\\\":0,"       \
-    "\\\"app_version\\\":\\\"1.0.0\\\",\\\"bootloader_version\\\":" \
-    "\\\"1.0.0\\\",\\\"active_slot\\\":\\\"A\\\",\\\"ota_error\\\":0}"
+    "{\\\"ota_state\\\":\\\"IDLE\\\"\\,\\\"ota_progress\\\":0\\,"       \
+    "\\\"app_version\\\":\\\"1.0.0\\\"\\,\\\"bootloader_version\\\":" \
+    "\\\"1.0.0\\\"\\,\\\"active_slot\\\":\\\"A\\\"\\,\\\"ota_error\\\":0}"
 
 static void log_message(esp_at_controller_t *controller, const char *message)
 {
@@ -59,6 +60,9 @@ static int send_state_command(esp_at_controller_t *controller)
         return format_and_send(controller, "AT+CWJAP=\"%s\",\"%s\"\r\n",
                                controller->config.wifi_ssid,
                                controller->config.wifi_password);
+    case ESP_AT_STATE_MQTT_CLEAN:
+        send_text(controller, "AT+MQTTCLEAN=0\r\n");
+        return 1;
     case ESP_AT_STATE_MQTT_CONFIG:
         written = snprintf(
             command, sizeof(command),
@@ -105,6 +109,71 @@ static void enter_retry(esp_at_controller_t *controller, uint32_t now_ms,
     log_message(controller, reason);
 }
 
+static const char *timeout_message(esp_at_state_t state)
+{
+    switch (state) {
+    case ESP_AT_STATE_SYNC:
+        return "AT_TIMEOUT_SYNC";
+    case ESP_AT_STATE_ECHO_OFF:
+        return "AT_TIMEOUT_ECHO_OFF";
+    case ESP_AT_STATE_WIFI_MODE:
+        return "AT_TIMEOUT_WIFI_MODE";
+    case ESP_AT_STATE_WIFI_JOIN:
+        return "AT_TIMEOUT_WIFI_JOIN";
+    case ESP_AT_STATE_MQTT_CLEAN:
+        return "AT_TIMEOUT_MQTT_CLEAN";
+    case ESP_AT_STATE_MQTT_CONFIG:
+        return "AT_TIMEOUT_MQTT_CONFIG";
+    case ESP_AT_STATE_MQTT_CONNECT:
+        return "AT_TIMEOUT_MQTT_CONNECT";
+    case ESP_AT_STATE_MQTT_SUBSCRIBE:
+        return "AT_TIMEOUT_MQTT_SUBSCRIBE";
+    case ESP_AT_STATE_MQTT_ANNOUNCE:
+        return "AT_TIMEOUT_MQTT_ANNOUNCE";
+    case ESP_AT_STATE_ONLINE:
+    case ESP_AT_STATE_RETRY:
+    default:
+        return "AT_TIMEOUT_UNKNOWN";
+    }
+}
+
+static uint32_t command_timeout_ms(esp_at_state_t state)
+{
+    if (state == ESP_AT_STATE_WIFI_JOIN) {
+        return WIFI_JOIN_TIMEOUT_MS;
+    }
+    return ESP_AT_COMMAND_TIMEOUT_MS;
+}
+
+static const char *error_message(esp_at_state_t state)
+{
+    switch (state) {
+    case ESP_AT_STATE_SYNC:
+        return "AT_ERROR_SYNC";
+    case ESP_AT_STATE_ECHO_OFF:
+        return "AT_ERROR_ECHO_OFF";
+    case ESP_AT_STATE_WIFI_MODE:
+        return "AT_ERROR_WIFI_MODE";
+    case ESP_AT_STATE_WIFI_JOIN:
+        return "AT_ERROR_WIFI_JOIN";
+    case ESP_AT_STATE_MQTT_CLEAN:
+        return "AT_ERROR_MQTT_CLEAN";
+    case ESP_AT_STATE_MQTT_CONFIG:
+        return "AT_ERROR_MQTT_CONFIG";
+    case ESP_AT_STATE_MQTT_CONNECT:
+        return "AT_ERROR_MQTT_CONNECT";
+    case ESP_AT_STATE_MQTT_SUBSCRIBE:
+        return "AT_ERROR_MQTT_SUBSCRIBE";
+    case ESP_AT_STATE_MQTT_ANNOUNCE:
+        return "AT_ERROR_MQTT_ANNOUNCE";
+    case ESP_AT_STATE_ONLINE:
+        return "AT_ERROR_ONLINE";
+    case ESP_AT_STATE_RETRY:
+    default:
+        return "AT_ERROR_UNKNOWN";
+    }
+}
+
 static void advance_state(esp_at_controller_t *controller, uint32_t now_ms)
 {
     if (controller->state < ESP_AT_STATE_MQTT_ANNOUNCE) {
@@ -126,7 +195,7 @@ static size_t escape_at_parameter(const char *input, char *output,
     size_t used = 0U;
 
     while (*input != '\0') {
-        if (*input == '"' || *input == '\\') {
+        if (*input == '"' || *input == '\\' || *input == ',') {
             if (used + 2U >= output_size) {
                 return 0U;
             }
@@ -176,8 +245,18 @@ static void process_line(esp_at_controller_t *controller, const char *line,
         }
         return;
     }
-    if (strcmp(line, "ERROR") == 0 || strstr(line, "DISCONNECTED") != NULL) {
-        enter_retry(controller, now_ms, "AT_SESSION_RETRY");
+    if (strcmp(line, "ERROR") == 0) {
+        if (controller->state == ESP_AT_STATE_MQTT_CLEAN &&
+            controller->command_sent != 0) {
+            advance_state(controller, now_ms);
+            return;
+        }
+        enter_retry(controller, now_ms, error_message(controller->state));
+        return;
+    }
+    if (controller->state == ESP_AT_STATE_ONLINE &&
+        strstr(line, "DISCONNECTED") != NULL) {
+        enter_retry(controller, now_ms, "AT_DISCONNECTED_ONLINE");
         return;
     }
     if (strcmp(line, "OK") == 0 && controller->command_sent != 0) {
@@ -216,8 +295,8 @@ void esp_at_controller_tick(esp_at_controller_t *controller, uint32_t now_ms)
     if (controller->state != ESP_AT_STATE_ONLINE &&
         controller->command_sent != 0 &&
         (uint32_t)(now_ms - controller->state_started_ms) >
-            ESP_AT_COMMAND_TIMEOUT_MS) {
-        enter_retry(controller, now_ms, "AT_COMMAND_TIMEOUT");
+            command_timeout_ms(controller->state)) {
+        enter_retry(controller, now_ms, timeout_message(controller->state));
         return;
     }
 
