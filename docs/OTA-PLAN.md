@@ -231,10 +231,11 @@ da implement va build PASS, nhung chua duoc chot PASS tren board tu widget.
 ## 9. Cong viec tiep theo dung thu tu
 
 1. Nap application/bootloader moi va hardware test widget khi app dang chay.
-2. Test duplicate RPC, mailbox CRC hong va reset giua handoff.
-3. Sua `GET_INFO` de doc metadata runtime thay vi response tinh.
-4. Publish progress chi tiet tai safe AT command boundaries.
-5. Provision CA va bat TLS certificate validation truoc production.
+2. Cho phep bootloader poll UART0/COM7 va ESP32 UART1 trong cung cloud window.
+3. Test duplicate RPC, mailbox CRC hong va reset giua handoff.
+4. Sua `GET_INFO` de doc metadata runtime thay vi response tinh.
+5. Publish progress chi tiet tai safe AT command boundaries.
+6. Provision CA va bat TLS certificate validation truoc production.
 
 Luong dich:
 

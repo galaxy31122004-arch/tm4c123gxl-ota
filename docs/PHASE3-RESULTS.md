@@ -6,7 +6,7 @@ Date: 2026-08-28
 
 | Check | Result | Evidence |
 | --- | --- | --- |
-| Full host C regression | PASS | 15/15 CTest |
+| Full host C regression | PASS | 18/18 CTest |
 | Python regression | PASS | 18/18 pytest |
 | `START_OTA` parsing | PASS | Valid/malformed semantic version cases |
 | ESP-AT HTTP framing | PASS | Incremental prefix and binary body tests |
@@ -77,8 +77,28 @@ firmware truoc khi MQTT vao ONLINE.
 - Remote trigger khi application dang chay: **BUILD VERIFIED; HARDWARE PENDING**.
 - Automatic application-to-bootloader reset handoff: **BUILD VERIFIED; HARDWARE PENDING**.
 
-Host suite PASS 16/16 va TI CCS build sinh app/bootloader BIN hop le. Can nap
+Host suite PASS 18/18 va TI CCS build sinh app/bootloader BIN hop le. Can nap
 artifact moi len board va bam widget de chot hardware acceptance.
+
+## ICDI Slot A smoke test
+
+Ngay 2026-08-28 da chay smoke test voi package
+`Nhay_den_ota_v1.0.2.bin`:
+
+1. Header duoc xac nhan la Slot A, version `1.0.2`, payload 969 byte.
+2. UniFlash mass erase, program bootloader tai `0x00000000` va package tai
+   `0x00008000`.
+3. Verify ca hai binary PASS va target reset/run thanh cong.
+4. COM7 ghi nhan `BL_READY` va `MQTT_RPC_READY` sau reset.
+
+Ten project la `Nhay den`, nhung source hien tai chi cau hinh LED GPIO, doc
+joystick va gui UART5; no khong toggle GPIO Port F. Vi vay test nay xac nhan
+flash/verify/boot, khong duoc tinh la LED blink PASS.
+
+Thu gui package qua `tm4c-ota --port COM7` khong nhan response khi cloud mode
+duoc bat. Nguyen nhan hien tai: bootloader cloud mode chi doc ESP32 tren UART1,
+khong poll UART0/COM7 trong cung service loop. Day la transport arbitration
+limitation can sua rieng; khong phai loi package Slot A.
 
 ## Status
 
